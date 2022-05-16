@@ -1,9 +1,14 @@
+use core::fmt::Write;
+
+use lazy_static::lazy_static;
+use spin::Mutex;
 use volatile::Volatile;
 
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 const NEWLINE_BYTE: u8 = b'\n';
 const ASCII_FALLBACK: u8 = 0xfe;
+const VGA_SEGMENT_START: usize = 0xb8000;
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,28 +74,17 @@ struct Buffer {
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
-struct Writer {
+pub struct Writer {
     col_position: usize,
     color_code: ColorCode,
     buffer: &'static mut Buffer,
 }
 
 impl Writer {
-    fn write_byte_internal(&mut self, byte: u8) {
-        if self.col_position >= BUFFER_WIDTH {
-            self.newline()
+    pub fn write_string(&mut self, string: &str) {
+        for byte in string.as_bytes() {
+            self.write_byte(*byte);
         }
-
-        let row = BUFFER_HEIGHT - 1;
-        let col = self.col_position;
-        let color_code = self.color_code;
-        let screen_char = ScreenChar {
-            ascii_code_point: byte,
-            color_code,
-        };
-
-        self.buffer.chars[row][col].write(screen_char);
-        self.col_position += 1;
     }
 
     fn write_byte(&mut self, byte: u8) {
@@ -99,12 +93,6 @@ impl Writer {
             0x20..=0x7e => self.write_byte_internal(byte),
             NEWLINE_BYTE => self.newline(),
             _ => self.write_byte_internal(ASCII_FALLBACK),
-        }
-    }
-
-    fn write_string(&mut self, string: &str) {
-        for byte in string.as_bytes() {
-            self.write_byte(*byte);
         }
     }
 
@@ -127,16 +115,36 @@ impl Writer {
             self.buffer.chars[row][col].write(blank);
         }
     }
+
+    fn write_byte_internal(&mut self, byte: u8) {
+        if self.col_position >= BUFFER_WIDTH {
+            self.newline()
+        }
+
+        let row = BUFFER_HEIGHT - 1;
+        let col = self.col_position;
+        let color_code = self.color_code;
+        let screen_char = ScreenChar {
+            ascii_code_point: byte,
+            color_code,
+        };
+
+        self.buffer.chars[row][col].write(screen_char);
+        self.col_position += 1;
+    }
 }
 
-pub fn print_something() {
-    let mut writer = Writer {
+impl Write for Writer {
+    fn write_str(&mut self, s: &str) -> core::fmt::Result {
+        self.write_string(s);
+        Ok(())
+    }
+}
+
+lazy_static! {
+    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         col_position: 0,
         color_code: ColorCode::new(Color::Yellow, Color::Black),
-        buffer: unsafe { &mut *(0xb8000 as *mut Buffer) },
-    };
-
-    writer.write_byte(b'H');
-    writer.write_string("ello ");
-    writer.write_string("Wörld!");
+        buffer: unsafe { &mut *(VGA_SEGMENT_START as *mut Buffer) },
+    });
 }
