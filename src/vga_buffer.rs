@@ -202,8 +202,6 @@ fn test_println_macro_does_not_panic_when_we_go_beyond_vga_height() {
 
 #[test_case]
 fn test_println_output_is_on_penultimate_line_and_uses_default_coloring() {
-    use crate::vga_buffer::{ScreenChar, WRITER};
-
     let string_to_print = "Something that is less than 80 chars";
     println!("{}", string_to_print);
 
