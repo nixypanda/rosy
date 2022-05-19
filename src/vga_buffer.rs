@@ -9,6 +9,9 @@ const BUFFER_WIDTH: usize = 80;
 const NEWLINE_BYTE: u8 = b'\n';
 const ASCII_FALLBACK: u8 = 0xfe;
 const VGA_SEGMENT_START: usize = 0xb8000;
+lazy_static! {
+    static ref DEFAULT_COLOR_CODE: ColorCode = ColorCode::new(Color::Yellow, Color::Black);
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -64,6 +67,16 @@ struct ScreenChar {
     color_code: ColorCode,
 }
 
+impl ScreenChar {
+    #[cfg(test)]
+    fn with_default_coloring(character: char) -> ScreenChar {
+        ScreenChar {
+            ascii_code_point: character as u8,
+            color_code: *DEFAULT_COLOR_CODE,
+        }
+    }
+}
+
 #[repr(transparent)]
 struct Buffer {
     // The compiler doesn’t know that we really access VGA buffer memory (instead of normal RAM)
@@ -85,6 +98,16 @@ impl Writer {
         for byte in string.as_bytes() {
             self.write_byte(*byte);
         }
+    }
+
+    #[cfg(test)]
+    fn char_at(&self, row: usize, col: usize) -> ScreenChar {
+        self.buffer.chars[row][col].read()
+    }
+
+    #[cfg(test)]
+    pub fn buffer_height(&self) -> usize {
+        BUFFER_HEIGHT
     }
 
     fn write_byte(&mut self, byte: u8) {
@@ -144,7 +167,7 @@ impl Write for Writer {
 lazy_static! {
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         col_position: 0,
-        color_code: ColorCode::new(Color::Yellow, Color::Black),
+        color_code: *DEFAULT_COLOR_CODE,
         buffer: unsafe { &mut *(VGA_SEGMENT_START as *mut Buffer) },
     });
 }
@@ -163,4 +186,32 @@ macro_rules! print {
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     WRITER.lock().write_fmt(args).unwrap();
+}
+
+#[test_case]
+fn test_println_macro_prints_one_line_without_panicking() {
+    println!("This is onen line");
+}
+
+#[test_case]
+fn test_println_macro_does_not_panic_when_we_go_beyond_vga_height() {
+    for _ in 0..100 {
+        println!("This should not panic!");
+    }
+}
+
+#[test_case]
+fn test_println_output_is_on_penultimate_line_and_uses_default_coloring() {
+    use crate::vga_buffer::{ScreenChar, WRITER};
+
+    let string_to_print = "Something that is less than 80 chars";
+    println!("{}", string_to_print);
+
+    let writer = WRITER.lock();
+    let height = writer.buffer_height();
+
+    for (i, c) in string_to_print.chars().enumerate() {
+        let screen_char = writer.char_at(height - 2, i);
+        assert_eq!(screen_char, ScreenChar::with_default_coloring(c));
+    }
 }
