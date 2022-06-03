@@ -11,6 +11,7 @@ volatile = { version = "0.2.6"}
 lazy_static = { version = "1.0", features = [ "spin_no_std" ] }
 spin = { version = "0.5.2" }
 uart_16550 = { version = "0.2.0" }
+bit_field = { version = "0.10.1" }
 
 [package.metadata.bootimage]
 test-args = [

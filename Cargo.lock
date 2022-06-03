@@ -33,6 +33,7 @@ dependencies = [
 name = "rosy"
 version = "0.1.0"
 dependencies = [
+ "bit_field",
  "bootloader",
  "lazy_static",
  "spin",
