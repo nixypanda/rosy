@@ -2,6 +2,8 @@ use core::arch::asm;
 
 use bit_field::BitField;
 
+use super::addr::VirtualAddress;
+
 const DEFAULT_RESERVED: u32 = 0;
 
 const IDT_INDEX_BREAKPOINT_EXCEPTION: u8 = 3;
@@ -174,10 +176,10 @@ impl InterruptDescriptorTable {
     pub fn load(&self) {
         use core::mem::size_of;
 
-        let ptr = DescriptorTablePointer {
-            base: self as *const _ as u64,
-            limit: (size_of::<Self>() - 1) as u16,
-        };
+        let ptr = DescriptorTablePointer::new(
+            VirtualAddress::new(self as *const _ as u64),
+            (size_of::<Self>() - 1) as u16,
+        );
 
         unsafe { load_iterrupt_descriptor_table(&ptr) };
     }
@@ -208,7 +210,7 @@ struct DescriptorTablePointer {
     /// Size of the DT.
     limit: u16,
     /// Pointer to the memory region containing the DT.
-    base: u64,
+    base: VirtualAddress,
 }
 
 /// Represents the interrupt stack frame pushed by the CPU on an interrupt or exception entry.
@@ -218,14 +220,14 @@ pub struct ExceptionStackFrame {
     /// This value points to the instruction that should be executed when the interrupt
     /// handler returns. For most interrupts, this value points to the instruction immediately
     /// following the last executed instruction.
-    instruction_pointer: u64,
+    instruction_pointer: VirtualAddress,
     /// The code segment selector, padded with zeros.
     code_segment: u64,
     /// The value of the `rflags` register at the time of the interrupt (or before the interrupt
     /// handler was called).
     cpu_flags: u64,
     /// The stack pointer at the time of the interrupt.
-    stack_pointer: u64,
+    stack_pointer: VirtualAddress,
     /// The stack segment descriptor at the time of the interrupt
     stack_segment: u64,
 }
