@@ -6,7 +6,7 @@
 
 use core::panic::PanicInfo;
 use rosy::{
-    interrupt::{invoke_breakpoint_exception, invoke_page_fault_exception},
+    interrupt::{invoke_breakpoint_exception, stack_overflow},
     print, println,
 };
 
@@ -17,9 +17,8 @@ pub extern "C" fn _start() -> ! {
     rosy::init();
 
     invoke_breakpoint_exception();
-    invoke_page_fault_exception();
-
-    loop {}
+    // invoke_page_fault_exception();
+    stack_overflow();
 
     #[cfg(test)]
     test_main();

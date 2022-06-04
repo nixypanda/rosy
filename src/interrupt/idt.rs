@@ -145,6 +145,27 @@ impl InterruptDescriptorTable {
         self.set_handler(IDT_INDEX_BREAKPOINT_EXCEPTION, handler_func);
     }
 
+    /// Double fault exception can occur when a second exception occurs during the handling of a
+    /// prior (first) exception handler
+    ///
+    /// The following combinations result in a double fault:
+    ///
+    /// | First Exception           |	Second Exception         |
+    /// |---------------------------|----------------------------|
+    /// | Divide-by-zero,           |  Invalid TSS,              |                 
+    /// | Invalid TSS,              |  Segment Not Present,      |                 
+    /// | Segment Not Present,      |  Stack-Segment Fault,      |                 
+    /// | Stack-Segment Fault,      |  General Protection Fault  |                   
+    /// | General Protection Fault  |                            |
+    /// |---------------------------|----------------------------|
+    /// | Page Fault	            | Page Fault,                |
+    /// |                           |  Invalid TSS,              |                        
+    /// |                           |  Segment Not Present,      |                        
+    /// |                           |  Stack-Segment Fault,      |                           
+    /// |                           |  General Protection Fault  |                          
+    ///
+    /// If a third interrupting event occurs while transferring control to the `#DF` handler, the
+    /// processor shuts down.
     pub fn set_double_fault_handler(&mut self, handler_func: DoubleFaultHandlerFunc) {
         self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize] =
             Entry::new(get_current_code_segment(), handler_func as u64);

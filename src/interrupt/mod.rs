@@ -44,6 +44,11 @@ pub fn invoke_page_fault_exception() {
     };
 }
 
+#[allow(unconditional_recursion)]
+pub fn stack_overflow() {
+    stack_overflow();
+}
+
 #[test_case]
 fn test_breakpoint_exception() {
     // Execution continues => Breakpoint handler is working
