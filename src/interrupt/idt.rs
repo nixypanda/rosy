@@ -5,6 +5,7 @@ use bit_field::BitField;
 const DEFAULT_RESERVED: u32 = 0;
 
 const IDT_INDEX_BREAKPOINT_EXCEPTION: u8 = 3;
+const IDT_INDEX_DOUBLE_FAULT_EXCEPTION: u8 = 8;
 
 /// The harware calls the Interrupt Descriptor Table (IDT) to handle all the interrupts that can
 /// occur. The hardware uses this table directly so we need to follow a predefined format.
@@ -39,6 +40,8 @@ pub struct InterruptDescriptorTable([Entry; 16]);
 ///
 /// Given that Entry has pointers to actual handlers we can use different types in the HandlerFunc
 type HandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame);
+
+type DoubleFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, u64) -> !;
 
 /// Each entry in the Interrupt Descriptor Table (IDT) has the following structure.
 ///
@@ -100,8 +103,7 @@ impl EntryOptions {
 }
 
 impl Entry {
-    fn new(gdt_selector: u16, handler_func: HandlerFunc) -> Self {
-        let pointer_to_handler = handler_func as u64;
+    fn new(gdt_selector: u16, pointer_to_handler: u64) -> Self {
         Entry {
             pointer_low: pointer_to_handler as u16,
             pointer_middle: (pointer_to_handler >> 16) as u16,
@@ -130,7 +132,7 @@ impl InterruptDescriptorTable {
     }
 
     fn set_handler(&mut self, index: u8, handler_func: HandlerFunc) {
-        self.0[index as usize] = Entry::new(get_current_code_segment(), handler_func);
+        self.0[index as usize] = Entry::new(get_current_code_segment(), handler_func as u64);
     }
 
     /// A breakpoint (`#BP`) exception occurs when an `INT3` instruction is executed. The
@@ -141,6 +143,11 @@ impl InterruptDescriptorTable {
     /// The vector number of the `#BP` exception is 3.
     pub fn set_breakpoint_handler(&mut self, handler_func: HandlerFunc) {
         self.set_handler(IDT_INDEX_BREAKPOINT_EXCEPTION, handler_func);
+    }
+
+    pub fn set_double_fault_handler(&mut self, handler_func: DoubleFaultHandlerFunc) {
+        self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize] =
+            Entry::new(get_current_code_segment(), handler_func as u64);
     }
 
     pub fn load(&self) {

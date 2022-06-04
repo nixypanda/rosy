@@ -5,7 +5,10 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-use rosy::{interrupt::invoke_breakpoint_exception, print, println};
+use rosy::{
+    interrupt::{invoke_breakpoint_exception, invoke_page_fault_exception},
+    print, println,
+};
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -14,6 +17,9 @@ pub extern "C" fn _start() -> ! {
     rosy::init();
 
     invoke_breakpoint_exception();
+    invoke_page_fault_exception();
+
+    loop {}
 
     #[cfg(test)]
     test_main();
