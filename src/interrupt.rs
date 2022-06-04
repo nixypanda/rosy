@@ -4,13 +4,11 @@ use lazy_static::lazy_static;
 
 use crate::{print, println};
 
-use self::idt::ExceptionStackFrame;
-
-mod idt;
+use crate::x86_64::idt::{ExceptionStackFrame, InterruptDescriptorTable};
 
 lazy_static! {
-    pub static ref INTERRUPT_DESCRIPTOR_TABLE: idt::InterruptDescriptorTable = {
-        let mut idt = idt::InterruptDescriptorTable::new();
+    pub static ref INTERRUPT_DESCRIPTOR_TABLE: InterruptDescriptorTable = {
+        let mut idt = InterruptDescriptorTable::new();
         idt.set_breakpoint_handler(breakpoint_handler);
         idt.set_double_fault_handler(double_fault_handler);
         idt

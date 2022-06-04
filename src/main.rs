@@ -18,7 +18,7 @@ pub extern "C" fn _start() -> ! {
 
     invoke_breakpoint_exception();
     // invoke_page_fault_exception();
-    stack_overflow();
+    // stack_overflow();
 
     #[cfg(test)]
     test_main();
