@@ -5,6 +5,7 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 
+mod gdt;
 pub mod interrupt;
 mod port;
 pub mod serial;
@@ -15,6 +16,7 @@ use core::ops::Fn;
 use core::panic::PanicInfo;
 
 pub fn init() {
+    crate::gdt::init();
     crate::interrupt::init();
 }
 

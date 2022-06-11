@@ -2,6 +2,7 @@ use core::arch::asm;
 
 use lazy_static::lazy_static;
 
+use crate::gdt::INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT;
 use crate::{print, println};
 
 use crate::x86_64::idt::{ExceptionStackFrame, InterruptDescriptorTable};
@@ -10,7 +11,10 @@ lazy_static! {
     pub static ref INTERRUPT_DESCRIPTOR_TABLE: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.set_breakpoint_handler(breakpoint_handler);
-        idt.set_double_fault_handler(double_fault_handler);
+        unsafe {
+            idt.set_double_fault_handler(double_fault_handler)
+                .set_stack_index(INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT);
+        }
         idt
     };
 }
