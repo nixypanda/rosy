@@ -62,7 +62,7 @@ type DoubleFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, u64
 struct Entry {
     pointer_low: u16,
     gdt_selector: u16,
-    options: EntryOptions,
+    pub(crate) options: EntryOptions,
     pointer_middle: u16,
     pointer_high: u32,
     reserved: u32,
@@ -80,8 +80,9 @@ struct Entry {
 /// | 13‑14	| Descriptor Privilege Level (DPL) | The minimal privilege level required for calling |
 /// |       |                                  | this handler.                                    |
 /// | 15	| Present                          |                                                  |
-#[derive(Debug, Clone, Copy)]
-struct EntryOptions(u16);
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(transparent)]
+pub(crate) struct EntryOptions(u16);
 
 impl EntryOptions {
     fn minimal() -> Self {
@@ -104,6 +105,25 @@ impl EntryOptions {
     pub fn disable_interrupts(&mut self, disable: bool) -> &mut Self {
         self.0.set_bit(8, !disable);
         self
+    }
+
+    /// Assigns a Interrupt Stack Table (IST) stack to this handler. The CPU will then always
+    /// switch to the specified stack before the handler is invoked. This allows kernels to
+    /// recover from corrupt stack pointers (e.g., on kernel stack overflow).
+    ///
+    /// An IST stack is specified by an IST index between 0 and 6 (inclusive). Using the same
+    /// stack for multiple interrupts can be dangerous when nested interrupts are possible.
+    ///
+    /// This function panics if the index is not in the range 0..7.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because the caller must ensure that the passed stack index is
+    /// valid and not used by other interrupts. Otherwise, memory safety violations are possible.
+    pub unsafe fn set_stack_index(&mut self, index: u16) {
+        // The hardware IST index starts at 1, but our software IST index
+        // starts at 0. Therefore we need to add 1 here.
+        self.0.set_bits(0..3, index + 1);
     }
 }
 
@@ -171,9 +191,15 @@ impl InterruptDescriptorTable {
     ///
     /// If a third interrupting event occurs while transferring control to the `#DF` handler, the
     /// processor shuts down.
-    pub fn set_double_fault_handler(&mut self, handler_func: DoubleFaultHandlerFunc) {
-        self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize] =
-            Entry::new(get_current_code_segment(), handler_func as u64);
+    #[allow(unaligned_references)]
+    pub(crate) fn set_double_fault_handler(
+        &mut self,
+        handler_func: DoubleFaultHandlerFunc,
+    ) -> &mut EntryOptions {
+        let entry = Entry::new(get_current_code_segment().0, handler_func as u64);
+        self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize] = entry;
+
+        &mut self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize].options
     }
 
     pub fn load(&self) {
