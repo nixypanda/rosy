@@ -2,7 +2,10 @@ use core::arch::asm;
 
 use bit_field::BitField;
 
-use super::addr::VirtualAddress;
+use super::{
+    addr::VirtualAddress, descriptor::DescriptorTablePointer,
+    segmentation::get_current_code_segment,
+};
 
 const DEFAULT_RESERVED: u32 = 0;
 
@@ -183,14 +186,6 @@ impl InterruptDescriptorTable {
 
         unsafe { load_iterrupt_descriptor_table(&ptr) };
     }
-}
-
-fn get_current_code_segment() -> u16 {
-    let segment: u16;
-    unsafe {
-        asm!("mov {0:x}, cs", out(reg) segment, options(nomem, nostack, preserves_flags));
-    }
-    segment
 }
 
 /// Loads the InterruptDescriptorTable by calling the lidt instruction

@@ -15,3 +15,11 @@ impl SegmentSelector {
         SegmentSelector((index << 3) | (requested_privilege_level as u16))
     }
 }
+
+pub(crate) fn get_current_code_segment() -> SegmentSelector {
+    let segment: u16;
+    unsafe {
+        asm!("mov {0:x}, cs", out(reg) segment, options(nomem, nostack, preserves_flags));
+    }
+    SegmentSelector(segment)
+}
