@@ -225,15 +225,6 @@ unsafe fn load_iterrupt_descriptor_table(idt: &DescriptorTablePointer) {
     asm!("lidt [{}]", in(reg) idt, options(nostack));
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(C, packed)]
-struct DescriptorTablePointer {
-    /// Size of the DT.
-    limit: u16,
-    /// Pointer to the memory region containing the DT.
-    base: VirtualAddress,
-}
-
 /// Represents the interrupt stack frame pushed by the CPU on an interrupt or exception entry.
 #[derive(Debug, Clone, Copy)]
 #[repr(C)]
