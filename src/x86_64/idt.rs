@@ -134,7 +134,7 @@ impl InterruptDescriptorTable {
     }
 
     fn set_handler(&mut self, index: u8, handler_func: HandlerFunc) {
-        self.0[index as usize] = Entry::new(get_current_code_segment(), handler_func as u64);
+        self.0[index as usize] = Entry::new(get_current_code_segment().0, handler_func as u64);
     }
 
     /// A breakpoint (`#BP`) exception occurs when an `INT3` instruction is executed. The
