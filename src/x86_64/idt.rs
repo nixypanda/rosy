@@ -13,6 +13,8 @@ const IDT_SIZE: usize = 64;
 const IDT_INDEX_BREAKPOINT_EXCEPTION: u8 = 3;
 const IDT_INDEX_DOUBLE_FAULT_EXCEPTION: u8 = 8;
 
+const NUMBER_OF_EXCEPTION_HANDLERS: u8 = 32;
+
 /// The harware calls the Interrupt Descriptor Table (IDT) to handle all the interrupts that can
 /// occur. The hardware uses this table directly so we need to follow a predefined format.
 ///
@@ -201,6 +203,18 @@ impl InterruptDescriptorTable {
         self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize] = entry;
 
         &mut self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize].options
+    }
+
+    pub fn set_hardware_interrupt(&mut self, index: u8, handler_func: HandlerFunc) {
+        if index < NUMBER_OF_EXCEPTION_HANDLERS {
+            panic!(
+                "Can't add hardware interrupt handler at inder {}. First {} indicies are reserved
+                 for specific handlers",
+                index,
+                NUMBER_OF_EXCEPTION_HANDLERS - 1
+            );
+        }
+        self.set_handler(index, handler_func);
     }
 
     pub fn load(&self) {

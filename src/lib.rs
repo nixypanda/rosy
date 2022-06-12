@@ -7,6 +7,7 @@
 
 pub mod gdt;
 pub mod interrupt;
+pub mod pic8258;
 pub mod port;
 pub mod serial;
 pub mod vga_buffer;
@@ -18,6 +19,12 @@ use core::panic::PanicInfo;
 pub fn init() {
     crate::gdt::init();
     crate::interrupt::init();
+    unsafe {
+        interrupt::PROGRAMABLE_INTERRUPT_CONTROLERS
+            .lock()
+            .initialize()
+    };
+    crate::x86_64::interrupts::enable();
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
