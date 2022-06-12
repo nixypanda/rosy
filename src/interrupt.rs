@@ -4,11 +4,16 @@ use crate::{
     gdt::INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT,
     pic8258::ChainedPics,
     print, println,
-    x86_64::idt::{ExceptionStackFrame, InterruptDescriptorTable},
+    x86_64::{
+        idt::{ExceptionStackFrame, InterruptDescriptorTable},
+        port::Port,
+    },
 };
 
 pub const PIC_1_OFFSET: u8 = 32;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
+
+const PS_2_CONTROLLER_PORT: u16 = 0x60;
 
 lazy_static! {
     pub static ref INTERRUPT_DESCRIPTOR_TABLE: InterruptDescriptorTable = {
@@ -64,7 +69,27 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStackFrame) {
-    print!("*");
+    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use spin::Mutex;
+
+    lazy_static! {
+        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(
+            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
+        );
+    }
+
+    let mut keyboard = KEYBOARD.lock();
+    let port = Port::new(PS_2_CONTROLLER_PORT);
+
+    let scancode: u8 = unsafe { port.read() };
+    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
+        if let Some(key) = keyboard.process_keyevent(key_event) {
+            match key {
+                DecodedKey::Unicode(character) => print!("{}", character),
+                DecodedKey::RawKey(key) => print!("{:?}", key),
+            }
+        }
+    }
 
     unsafe {
         PROGRAMABLE_INTERRUPT_CONTROLERS
