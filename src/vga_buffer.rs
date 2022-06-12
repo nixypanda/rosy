@@ -4,6 +4,8 @@ use lazy_static::lazy_static;
 use spin::Mutex;
 use volatile::Volatile;
 
+use crate::x86_64::interrupts::execute_without_interrupts;
+
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 const NEWLINE_BYTE: u8 = b'\n';
@@ -185,7 +187,14 @@ macro_rules! print {
 
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
-    WRITER.lock().write_fmt(args).unwrap();
+    // Execute without interrupts disables interrupts while executing a piece of code. We use it to
+    // ensure that no interrupt cannot occur as long as the Mutex is locked.
+    // Hardware interrupts can occur asynchronously while the Mutex is locked. In that situation
+    // WRITER is locked the interrupt handler waits on the Mutex to be unlocked. But this never
+    // happens as the `_start` is waiting on the interrupt handler to finish.
+    execute_without_interrupts(|| {
+        WRITER.lock().write_fmt(args).unwrap();
+    });
 }
 
 #[test_case]
@@ -203,13 +212,14 @@ fn test_println_macro_does_not_panic_when_we_go_beyond_vga_height() {
 #[test_case]
 fn test_println_output_is_on_penultimate_line_and_uses_default_coloring() {
     let string_to_print = "Something that is less than 80 chars";
-    println!("{}", string_to_print);
+    execute_without_interrupts(|| {
+        let mut writer = WRITER.lock();
+        writeln!(writer, "\n{}", string_to_print).expect("writeln failed");
+        let height = writer.buffer_height();
 
-    let writer = WRITER.lock();
-    let height = writer.buffer_height();
-
-    for (i, c) in string_to_print.chars().enumerate() {
-        let screen_char = writer.char_at(height - 2, i);
-        assert_eq!(screen_char, ScreenChar::with_default_coloring(c));
-    }
+        for (i, c) in string_to_print.chars().enumerate() {
+            let screen_char = writer.char_at(height - 2, i);
+            assert_eq!(screen_char, ScreenChar::with_default_coloring(c));
+        }
+    })
 }

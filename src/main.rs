@@ -17,6 +17,12 @@ pub extern "C" fn _start() -> ! {
     test_main();
 
     println!("It did not crash!");
+    loop {
+        print!("+");
+        for _ in 0..10000 {
+            // Do nothing
+        }
+    }
     loop {}
 }
 
