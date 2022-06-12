@@ -42,3 +42,9 @@ where
 
     ret
 }
+
+pub fn invoke_breakpoint_exception() {
+    // Cause a breakpoint exception by invoking the `int3` instruction.
+    // https://en.wikipedia.org/wiki/INT_%28x86_instruction%29
+    unsafe { asm!("int3", options(nomem, nostack)) }
+}

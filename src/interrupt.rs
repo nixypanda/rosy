@@ -1,5 +1,3 @@
-use core::arch::asm;
-
 use lazy_static::lazy_static;
 
 use crate::{
@@ -67,12 +65,6 @@ pub fn init() {
     INTERRUPT_DESCRIPTOR_TABLE.load();
 }
 
-pub fn invoke_breakpoint_exception() {
-    // Cause a breakpoint exception by invoking the `int3` instruction.
-    // https://en.wikipedia.org/wiki/INT_%28x86_instruction%29
-    unsafe { asm!("int3", options(nomem, nostack)) }
-}
-
 pub fn invoke_page_fault_exception() {
     unsafe {
         *(0xdeadbeef as *mut u64) = 42;
@@ -86,6 +78,7 @@ pub fn stack_overflow() {
 
 #[test_case]
 fn test_breakpoint_exception() {
+    use crate::x86_64::interrupts::invoke_breakpoint_exception;
     // Execution continues => Breakpoint handler is working
     invoke_breakpoint_exception();
 }
