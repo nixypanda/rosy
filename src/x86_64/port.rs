@@ -34,6 +34,12 @@ impl PortWrite for u8 {
     }
 }
 
+impl PortWrite for u32 {
+    unsafe fn write_to_port(port: u16, value: u32) {
+        asm!("out dx, eax", in("dx") port, in("eax") value, options(nomem, nostack, preserves_flags));
+    }
+}
+
 pub struct Port<T> {
     port: u16,
     phantom: PhantomData<T>,
