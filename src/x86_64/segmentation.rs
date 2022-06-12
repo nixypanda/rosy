@@ -16,7 +16,7 @@ impl SegmentSelector {
     }
 }
 
-pub(crate) fn get_current_code_segment() -> SegmentSelector {
+pub fn get_current_code_segment() -> SegmentSelector {
     let segment: u16;
     unsafe {
         asm!("mov {0:x}, cs", out(reg) segment, options(nomem, nostack, preserves_flags));
@@ -32,7 +32,7 @@ pub(crate) fn get_current_code_segment() -> SegmentSelector {
 /// Note we cannot use a "far call" (`lcall`) or "far jmp" (`ljmp`) to do this because then we
 /// would only be able to jump to 32-bit instruction pointers. Only Intel implements support
 /// for 64-bit far calls/jumps in long-mode, AMD does not.
-pub(crate) unsafe fn set_code_segment_selector(sel: SegmentSelector) {
+pub unsafe fn set_code_segment_selector(sel: SegmentSelector) {
     asm!(
         "push {sel}",
         "lea {tmp}, [1f + rip]",

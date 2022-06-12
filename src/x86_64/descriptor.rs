@@ -22,7 +22,7 @@ impl DescriptorTablePointer {
 /// Segmentation is no longer supported in 64-bit mode, so most of the descriptor
 /// contents are ignored.
 #[derive(Debug, Clone)]
-pub(crate) enum Descriptor {
+pub enum Descriptor {
     /// Descriptor for a code or data segment.
     ///
     /// Since segmentation is no longer supported in 64-bit mode, almost all of
@@ -39,7 +39,7 @@ impl Descriptor {
         Descriptor::UserSegment(DescriptorFlags::KERNEL_CODE64.bits())
     }
 
-    pub(crate) fn tss_segment(tss: &TaskStateSegment) -> Descriptor {
+    pub fn tss_segment(tss: &TaskStateSegment) -> Descriptor {
         use core::mem::size_of;
 
         let ptr = tss as *const _ as u64;

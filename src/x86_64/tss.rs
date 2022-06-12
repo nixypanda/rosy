@@ -14,7 +14,7 @@ const NUMBER_OF_INTERRUPT_STACKS: usize = 7;
 /// Then we can load our TSS invoking the ltr instruction with the respective GDT index.
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
-pub(crate) struct TaskStateSegment {
+pub struct TaskStateSegment {
     reserved_1: u32,
     // The Privilege Stack Table is used by the CPU when the privilege level changes.
     //
@@ -30,7 +30,7 @@ pub(crate) struct TaskStateSegment {
     // CPU pushes the exception stack frame.
     // The switching mechanism is implemented as an Interrupt Stack Table (IST). The IST is a table
     // of 7 pointers to known-good stacks.
-    pub(crate) interrupt_stack_table: [VirtualAddress; NUMBER_OF_INTERRUPT_STACKS],
+    pub interrupt_stack_table: [VirtualAddress; NUMBER_OF_INTERRUPT_STACKS],
     reserved_3: u64,
     reserved_4: u16,
     // TODO: Figure out what this is.
@@ -38,7 +38,7 @@ pub(crate) struct TaskStateSegment {
 }
 
 impl TaskStateSegment {
-    pub(crate) fn new() -> TaskStateSegment {
+    pub fn new() -> TaskStateSegment {
         TaskStateSegment {
             privilege_stack_table: [VirtualAddress::zero(); NUMBER_OF_PRIVILEGE_LEVELS],
             interrupt_stack_table: [VirtualAddress::zero(); NUMBER_OF_INTERRUPT_STACKS],

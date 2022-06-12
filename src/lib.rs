@@ -5,12 +5,12 @@
 #![reexport_test_harness_main = "test_main"]
 #![feature(abi_x86_interrupt)]
 
-mod gdt;
+pub mod gdt;
 pub mod interrupt;
-mod port;
+pub mod port;
 pub mod serial;
 pub mod vga_buffer;
-mod x86_64;
+pub mod x86_64;
 
 use core::ops::Fn;
 use core::panic::PanicInfo;

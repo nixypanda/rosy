@@ -8,7 +8,7 @@ use crate::x86_64::{
     tss::{load_task_state_segment, TaskStateSegment},
 };
 
-pub(crate) const INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT: u16 = 0;
+pub const INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT: u16 = 0;
 
 lazy_static! {
     static ref TASK_STATE_SEGMENT: TaskStateSegment = {

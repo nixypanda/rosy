@@ -62,7 +62,7 @@ type DoubleFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, u64
 struct Entry {
     pointer_low: u16,
     gdt_selector: u16,
-    pub(crate) options: EntryOptions,
+    pub options: EntryOptions,
     pointer_middle: u16,
     pointer_high: u32,
     reserved: u32,
@@ -82,7 +82,7 @@ struct Entry {
 /// | 15	| Present                          |                                                  |
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(transparent)]
-pub(crate) struct EntryOptions(u16);
+pub struct EntryOptions(u16);
 
 impl EntryOptions {
     fn minimal() -> Self {
@@ -192,7 +192,7 @@ impl InterruptDescriptorTable {
     /// If a third interrupting event occurs while transferring control to the `#DF` handler, the
     /// processor shuts down.
     #[allow(unaligned_references)]
-    pub(crate) fn set_double_fault_handler(
+    pub fn set_double_fault_handler(
         &mut self,
         handler_func: DoubleFaultHandlerFunc,
     ) -> &mut EntryOptions {

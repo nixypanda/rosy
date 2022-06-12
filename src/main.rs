@@ -6,7 +6,7 @@
 
 use core::panic::PanicInfo;
 use rosy::{
-    interrupt::{invoke_breakpoint_exception, invoke_page_fault_exception, stack_overflow},
+    interrupt::{invoke_breakpoint_exception, stack_overflow},
     print, println,
 };
 
