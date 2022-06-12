@@ -8,6 +8,7 @@ use super::{
 };
 
 const DEFAULT_RESERVED: u32 = 0;
+const IDT_SIZE: usize = 64;
 
 const IDT_INDEX_BREAKPOINT_EXCEPTION: u8 = 3;
 const IDT_INDEX_DOUBLE_FAULT_EXCEPTION: u8 = 8;
@@ -35,7 +36,7 @@ const IDT_INDEX_DOUBLE_FAULT_EXCEPTION: u8 = 8;
 /// - general protection fault
 /// - page fault
 /// - reserved
-pub struct InterruptDescriptorTable([Entry; 16]);
+pub struct InterruptDescriptorTable([Entry; IDT_SIZE]);
 
 /// Why use x86-interrupt calling convention?
 /// - aware that the arguments lie on the stack
@@ -153,7 +154,7 @@ impl Entry {
 
 impl InterruptDescriptorTable {
     pub fn new() -> Self {
-        InterruptDescriptorTable([Entry::missing(); 16])
+        InterruptDescriptorTable([Entry::missing(); IDT_SIZE])
     }
 
     fn set_handler(&mut self, index: u8, handler_func: HandlerFunc) {
