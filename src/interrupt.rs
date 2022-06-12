@@ -69,13 +69,16 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStackFrame) {
-    use pc_keyboard::{layouts, DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use crate::keyboard::ColemakDHm;
+    use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1};
     use spin::Mutex;
 
     lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<layouts::Us104Key, ScancodeSet1>> = Mutex::new(
-            Keyboard::new(layouts::Us104Key, ScancodeSet1, HandleControl::Ignore)
-        );
+        static ref KEYBOARD: Mutex<Keyboard<ColemakDHm, ScancodeSet1>> = Mutex::new(Keyboard::new(
+            ColemakDHm,
+            ScancodeSet1,
+            HandleControl::Ignore
+        ));
     }
 
     let mut keyboard = KEYBOARD.lock();
