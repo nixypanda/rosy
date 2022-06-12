@@ -19,6 +19,7 @@ lazy_static! {
                 .set_stack_index(INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT);
         }
         idt.set_hardware_interrupt(InterruptIndex::Timer.as_u8(), timer_interrupt_handler);
+        idt.set_hardware_interrupt(InterruptIndex::Keyboard.as_u8(), keyboard_interrupt_handler);
         idt
     };
 }
@@ -32,6 +33,7 @@ lazy_static! {
 #[repr(u8)]
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
+    Keyboard,
 }
 
 impl InterruptIndex {
@@ -58,6 +60,16 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFr
         PROGRAMABLE_INTERRUPT_CONTROLERS
             .lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    }
+}
+
+extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStackFrame) {
+    print!("*");
+
+    unsafe {
+        PROGRAMABLE_INTERRUPT_CONTROLERS
+            .lock()
+            .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
     }
 }
 
