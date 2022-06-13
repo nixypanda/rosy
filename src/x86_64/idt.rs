@@ -1,6 +1,7 @@
 use core::arch::asm;
 
 use bit_field::BitField;
+use bitflags::bitflags;
 
 use super::{
     addr::VirtualAddress, descriptor::DescriptorTablePointer,
@@ -12,6 +13,7 @@ const IDT_SIZE: usize = 64;
 
 const IDT_INDEX_BREAKPOINT_EXCEPTION: u8 = 3;
 const IDT_INDEX_DOUBLE_FAULT_EXCEPTION: u8 = 8;
+const IDT_INDEX_PAGE_FAULT_EXCEPTION: u8 = 14;
 
 const NUMBER_OF_EXCEPTION_HANDLERS: u8 = 32;
 
@@ -39,17 +41,6 @@ const NUMBER_OF_EXCEPTION_HANDLERS: u8 = 32;
 /// - page fault
 /// - reserved
 pub struct InterruptDescriptorTable([Entry; IDT_SIZE]);
-
-/// Why use x86-interrupt calling convention?
-/// - aware that the arguments lie on the stack
-/// - uses iretq instruction to return instead of normal ret
-/// - handles error codes if proper types are supplied. Error codes can change stack alignment,
-/// this calling convention takes care of all that complexity for us
-///
-/// Given that Entry has pointers to actual handlers we can use different types in the HandlerFunc
-type HandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame);
-
-type DoubleFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, u64) -> !;
 
 /// Each entry in the Interrupt Descriptor Table (IDT) has the following structure.
 ///
@@ -205,6 +196,11 @@ impl InterruptDescriptorTable {
         &mut self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize].options
     }
 
+    pub fn set_page_fault_handler(&mut self, handler_func: PageFaultHandlerFunc) {
+        self.0[IDT_INDEX_PAGE_FAULT_EXCEPTION as usize] =
+            Entry::new(get_current_code_segment().0, handler_func as u64);
+    }
+
     pub fn set_hardware_interrupt(&mut self, index: u8, handler_func: HandlerFunc) {
         if index < NUMBER_OF_EXCEPTION_HANDLERS {
             panic!(
@@ -257,4 +253,46 @@ pub struct ExceptionStackFrame {
     stack_pointer: VirtualAddress,
     /// The stack segment descriptor at the time of the interrupt
     stack_segment: u64,
+}
+
+/// Why use x86-interrupt calling convention?
+/// - aware that the arguments lie on the stack
+/// - uses iretq instruction to return instead of normal ret
+/// - handles error codes if proper types are supplied. Error codes can change stack alignment,
+/// this calling convention takes care of all that complexity for us
+///
+/// Given that Entry has pointers to actual handlers we can use different types in the HandlerFunc
+type HandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame);
+
+type DoubleFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, u64) -> !;
+
+type PageFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, PageFaultErrorCode);
+
+bitflags! {
+    #[repr(transparent)]
+    pub struct PageFaultErrorCode: u64 {
+        // When set, the page fault was caused by a page-protection violation. When not set, it was
+        // caused by a non-present page.
+        const PROTECTION_VIOLATION     = 1 << 0;
+        // When set, the page fault was caused by a write access. When not set, it was caused by a
+        // read access. Does not necessarily indicate if this was caused by a read or a write
+        // instruction.
+        const CAUSED_BY_WRITE          = 1 << 1;
+        // When set, the page fault was caused while CPL = 3. Else the fault was caused in
+        // supervisor mode (CPL 0, 1, or 2). This does not necessarily mean that the page fault was
+        // a privilege violation.
+        const CAUSED_BY_USER           = 1 << 2;
+        // hen set, one or more page directory entries contain reserved bits which are set to 1.
+        // This only applies when the PSE or PAE flags in CR4 are set to 1
+        const MALFORMED_TABLE          = 1 << 3;
+        // When set, the page fault was caused by an instruction fetch. This only applies when the
+        // No-Execute bit is supported and enabled.
+        const INSTRUCTION_FETCH        = 1 << 4;
+        // When set, the page fault was caused by a protection-key violation. The PKRU register
+        // (for user-mode accesses) or PKRS MSR (for supervisor-mode accesses) specifies the
+        // protection key rights.
+        const PROTECTION_KEY_VIOLATION = 1 << 5;
+        // When set, the page fault was caused by a shadow stack access.
+        const CAUSED_BY_SHADOW_STACK   = 1 << 6;
+    }
 }

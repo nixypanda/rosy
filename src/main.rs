@@ -5,13 +5,15 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-use rosy::{print, println, utils::halt_loop};
+use rosy::{interrupt::invoke_page_fault_exception, print, println, utils::halt_loop};
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     println!("Hello World!");
 
     rosy::init();
+
+    invoke_page_fault_exception();
 
     #[cfg(test)]
     test_main();

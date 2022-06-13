@@ -5,7 +5,8 @@ use crate::{
     pic8258::ChainedPics,
     print, println,
     x86_64::{
-        idt::{ExceptionStackFrame, InterruptDescriptorTable},
+        idt::{ExceptionStackFrame, InterruptDescriptorTable, PageFaultErrorCode},
+        instructions::read_control_register_2,
         port::Port,
     },
 };
@@ -23,6 +24,7 @@ lazy_static! {
             idt.set_double_fault_handler(double_fault_handler)
                 .set_stack_index(INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT);
         }
+        idt.set_page_fault_handler(page_fault_handler);
         idt.set_hardware_interrupt(InterruptIndex::Timer.as_u8(), timer_interrupt_handler);
         idt.set_hardware_interrupt(InterruptIndex::Keyboard.as_u8(), keyboard_interrupt_handler);
         idt
@@ -56,6 +58,22 @@ extern "x86-interrupt" fn double_fault_handler(
     _error_code: u64,
 ) -> ! {
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+}
+
+extern "x86-interrupt" fn page_fault_handler(
+    stack_frame: ExceptionStackFrame,
+    error_code: PageFaultErrorCode,
+) {
+    let responsible_virtual_address = read_control_register_2();
+
+    println!("EXCEPTION: PAGE FAULT");
+    println!("EXCEPTION: PAGE FAULT: Error Code: {:?}", error_code);
+    println!(
+        "EXCEPTION: PAGE FAULT: Virtual address responsible {:?}",
+        responsible_virtual_address
+    );
+    println!("EXCEPTION: PAGE FAULT: Stack Frame\n{:#?}", stack_frame);
+    loop {}
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFrame) {
