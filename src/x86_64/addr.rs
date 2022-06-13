@@ -1,4 +1,4 @@
-use core::ops::Add;
+use core::{fmt, ops::Add};
 
 use bit_field::BitField;
 
@@ -102,6 +102,24 @@ impl PhysicalAddress {
             0 => Ok(PhysicalAddress(addr)),
             other => Err(InvalidPhysicalAddress(other)),
         }
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub fn as_ptr<T>(&self) -> *const T {
+        self.0 as *const T
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub fn as_mut_ptr<T>(self) -> *mut T {
+        self.as_ptr::<T>() as *mut T
+    }
+}
+
+impl Add<u64> for PhysicalAddress {
+    type Output = Self;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        PhysicalAddress::new(self.0 + rhs as u64)
     }
 }
 
