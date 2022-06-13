@@ -12,7 +12,7 @@ use bit_field::BitField;
 /// On `x86_64`, only the 48 lower bits of a virtual address can be used. The top 16 bits need
 /// to be copies of bit 47, i.e. the most significant bit. Addresses that fulfil this criterium
 /// are called “canonical”. This type guarantees that it always represents a canonical address.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct VirtualAddress(u64);
 
@@ -74,10 +74,18 @@ impl Add<usize> for VirtualAddress {
     }
 }
 
+impl fmt::Debug for VirtualAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("VirtualAddress")
+            .field(&format_args!("{:#x?}", self.0))
+            .finish()
+    }
+}
+
 /// A passed `u64` was not a valid physical address.
 ///
 /// This means that bits 52 to 64 were not all null.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct PhysicalAddress(u64);
 
@@ -94,5 +102,13 @@ impl PhysicalAddress {
             0 => Ok(PhysicalAddress(addr)),
             other => Err(InvalidPhysicalAddress(other)),
         }
+    }
+}
+
+impl fmt::Debug for PhysicalAddress {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_tuple("PhysicalAddress")
+            .field(&format_args!("{:#x?}", self.0))
+            .finish()
     }
 }
