@@ -5,7 +5,7 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-use rosy::{interrupt::invoke_page_fault_exception, print, println, utils::halt_loop};
+use rosy::{print, println, utils::halt_loop, x86_64::instructions::read_control_register_3};
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -13,7 +13,11 @@ pub extern "C" fn _start() -> ! {
 
     rosy::init();
 
-    invoke_page_fault_exception();
+    let (base_page_table_address, _) = read_control_register_3();
+    println!(
+        "Base Address of the Page Table: {:?}",
+        base_page_table_address
+    );
 
     #[cfg(test)]
     test_main();

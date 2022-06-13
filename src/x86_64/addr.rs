@@ -73,3 +73,26 @@ impl Add<usize> for VirtualAddress {
         VirtualAddress::new(self.0 + rhs as u64)
     }
 }
+
+/// A passed `u64` was not a valid physical address.
+///
+/// This means that bits 52 to 64 were not all null.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct PhysicalAddress(u64);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InvalidPhysicalAddress(u64);
+
+impl PhysicalAddress {
+    pub fn new(addr: u64) -> PhysicalAddress {
+        Self::try_new(addr).expect("Physical address must not contain any data in bits 52 to 64")
+    }
+
+    pub fn try_new(addr: u64) -> Result<PhysicalAddress, InvalidPhysicalAddress> {
+        match addr.get_bits(52..64) {
+            0 => Ok(PhysicalAddress(addr)),
+            other => Err(InvalidPhysicalAddress(other)),
+        }
+    }
+}
