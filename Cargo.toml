@@ -10,7 +10,7 @@ name = "stack_overflow"
 harness = false
 
 [dependencies]
-bootloader = { version = "0.9.8"}
+bootloader = { version = "0.9.8", features = ["map_physical_memory"] }
 volatile = { version = "0.2.6"}
 lazy_static = { version = "1.0", features = [ "spin_no_std" ] }
 spin = { version = "0.5.2" }
