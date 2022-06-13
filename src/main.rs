@@ -5,7 +5,7 @@
 #![reexport_test_harness_main = "test_main"]
 
 use core::panic::PanicInfo;
-use rosy::{print, println};
+use rosy::{print, println, utils::halt_loop};
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -17,7 +17,7 @@ pub extern "C" fn _start() -> ! {
     test_main();
 
     println!("It did not crash!");
-    loop {}
+    halt_loop();
 }
 
 #[cfg(not(test))]
