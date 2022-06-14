@@ -1,11 +1,15 @@
-use core::{arch::asm, ops::Range};
+use core::{
+    arch::asm,
+    ops::{Index, Range},
+};
 
 use bit_field::BitField;
 use bitflags::bitflags;
 
 use super::{
-    address::VirtualAddress, descriptor::DescriptorTablePointer,
-    segmentation::get_current_code_segment,
+    address::VirtualAddress,
+    descriptor::DescriptorTablePointer,
+    segmentation::{get_current_code_segment, SegmentSelector},
 };
 
 const DEFAULT_RESERVED: u32 = 0;
@@ -130,12 +134,12 @@ impl EntryOptions {
 }
 
 impl Entry {
-    fn new(gdt_selector: u16, pointer_to_handler: u64) -> Self {
+    fn new(gdt_selector: SegmentSelector, pointer_to_handler: u64) -> Self {
         Entry {
             pointer_low: pointer_to_handler as u16,
             pointer_middle: (pointer_to_handler >> 16) as u16,
             pointer_high: (pointer_to_handler >> 32) as u32,
-            gdt_selector,
+            gdt_selector: gdt_selector.0,
             options: EntryOptions::new(),
             reserved: DEFAULT_RESERVED,
         }
@@ -159,7 +163,7 @@ impl InterruptDescriptorTable {
     }
 
     fn set_handler(&mut self, index: u8, handler_func: HandlerFunc) {
-        self.0[index as usize] = Entry::new(get_current_code_segment().0, handler_func as u64);
+        self.0[index as usize] = Entry::new(get_current_code_segment(), handler_func as u64);
     }
 
     /// A breakpoint (`#BP`) exception occurs when an `INT3` instruction is executed. The
@@ -198,7 +202,7 @@ impl InterruptDescriptorTable {
         &mut self,
         handler_func: DoubleFaultHandlerFunc,
     ) -> &mut EntryOptions {
-        let entry = Entry::new(get_current_code_segment().0, handler_func as u64);
+        let entry = Entry::new(get_current_code_segment(), handler_func as u64);
         self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize] = entry;
 
         &mut self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize].options
@@ -206,7 +210,7 @@ impl InterruptDescriptorTable {
 
     pub fn set_page_fault_handler(&mut self, handler_func: PageFaultHandlerFunc) {
         self.0[IDT_INDEX_PAGE_FAULT_EXCEPTION as usize] =
-            Entry::new(get_current_code_segment().0, handler_func as u64);
+            Entry::new(get_current_code_segment(), handler_func as u64);
     }
 
     pub fn set_hardware_interrupt(&mut self, index: u8, handler_func: HandlerFunc) {
