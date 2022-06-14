@@ -1,4 +1,4 @@
-use core::arch::asm;
+use core::{arch::asm, ops::Range};
 
 use bit_field::BitField;
 use bitflags::bitflags;
@@ -16,6 +16,8 @@ const IDT_INDEX_DOUBLE_FAULT_EXCEPTION: u8 = 8;
 const IDT_INDEX_PAGE_FAULT_EXCEPTION: u8 = 14;
 
 const NUMBER_OF_EXCEPTION_HANDLERS: u8 = 32;
+
+const ENTRY_OPTIONS_IST_INDEX_BITS: Range<usize> = 0..3;
 
 /// The harware calls the Interrupt Descriptor Table (IDT) to handle all the interrupts that can
 /// occur. The hardware uses this table directly so we need to follow a predefined format.
@@ -62,42 +64,48 @@ struct Entry {
     reserved: u32,
 }
 
-/// | Bits  |	Name                           |     Description                                  |
-/// | 0-2   | Interrupt Stack Table Index      | 0: Don’t switch stacks,                          |
-/// |       |                                  | 1-7: Switch to the n-th stack in the Interrupt   |
-/// |       |                                  | Stack Table when this handler is called.         |
-/// | 3-7   | Reserved                         |                                                  |
-/// | 8     | 0: Interrupt Gate,               | If this bit is 0, interrupts are disabled when   |
-/// |       | 1: Trap Gate                     | this handler is called.                          |
-/// | 9-11  | must be one                      |                                                  |
-/// | 12	| must be zero                     |                                                  |
-/// | 13‑14	| Descriptor Privilege Level (DPL) | The minimal privilege level required for calling |
-/// |       |                                  | this handler.                                    |
-/// | 15	| Present                          |                                                  |
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(transparent)]
-pub struct EntryOptions(u16);
+bitflags! {
+    #[repr(transparent)]
+    pub struct EntryOptions: u16 {
+        // | 0-2   | Interrupt Stack Table Index | 0: Don’t switch stacks,                        |
+        // |       |                             | 1-7: Switch to the n-th stack in the Interrupt |
+        // |       |                             | Stack Table when this handler is called.       |
+        // 3 - 7 are Reserved
+        // When this bit is 0, interrupts are disabled when this handler is called.
+        const INTERRUPTS_ENABLED = 1 << 8;
+        // These bits must be set to one
+        const BIT_9              = 1 << 9;
+        const BIT_10             = 1 << 10;
+        const BIT_11             = 1 << 11;
+        const MUST_BE_ONE        = Self::BIT_9.bits | Self::BIT_10.bits | Self::BIT_11.bits;
+        // | 13‑14 | Descriptor Privilege Level (DPL) | The minimal privilege level required |
+        // |       |                                  | for calling this handler.            |
+        const DPL_LOW            = 1 << 13;
+        const DPL_HIGH           = 1 << 14;
+        const DPL_MASK           = Self::DPL_LOW.bits | Self::DPL_HIGH.bits;
+        // Says that the handler is present.
+        const PRESENT            = 1 << 15;
+    }
+}
 
 impl EntryOptions {
     fn minimal() -> Self {
-        let mut options = 0;
-        options.set_bits(9..12, 0b111); // 'must-be-one' bits
-        EntryOptions(options)
+        EntryOptions::MUST_BE_ONE
     }
 
     fn new() -> Self {
         let mut options = Self::minimal();
-        options.set_present(true).disable_interrupts(true);
+        options.set_present().disable_interrupts();
         options
     }
 
-    pub fn set_present(&mut self, present: bool) -> &mut Self {
-        self.0.set_bit(15, present);
+    fn set_present(&mut self) -> &mut Self {
+        self.set(EntryOptions::PRESENT, true);
         self
     }
 
-    pub fn disable_interrupts(&mut self, disable: bool) -> &mut Self {
-        self.0.set_bit(8, !disable);
+    fn disable_interrupts(&mut self) -> &mut Self {
+        self.set(EntryOptions::INTERRUPTS_ENABLED, false);
         self
     }
 
@@ -117,7 +125,7 @@ impl EntryOptions {
     pub unsafe fn set_stack_index(&mut self, index: u16) {
         // The hardware IST index starts at 1, but our software IST index
         // starts at 0. Therefore we need to add 1 here.
-        self.0.set_bits(0..3, index + 1);
+        self.bits.set_bits(ENTRY_OPTIONS_IST_INDEX_BITS, index + 1);
     }
 }
 
