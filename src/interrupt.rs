@@ -4,6 +4,7 @@ use crate::{
     gdt::INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT,
     pic8258::ChainedPics,
     print, println,
+    utils::halt_loop,
     x86_64::{
         idt::{ExceptionStackFrame, InterruptDescriptorTable, PageFaultErrorCode},
         instructions::read_control_register_2,
@@ -16,6 +17,10 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 const PS_2_CONTROLLER_PORT: u16 = 0x60;
 
+pub fn init() {
+    INTERRUPT_DESCRIPTOR_TABLE.load();
+}
+
 lazy_static! {
     pub static ref INTERRUPT_DESCRIPTOR_TABLE: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
@@ -25,8 +30,8 @@ lazy_static! {
                 .set_stack_index(INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT);
         }
         idt.set_page_fault_handler(page_fault_handler);
-        idt.set_hardware_interrupt(InterruptIndex::Timer.as_u8(), timer_interrupt_handler);
-        idt.set_hardware_interrupt(InterruptIndex::Keyboard.as_u8(), keyboard_interrupt_handler);
+        idt.set_interrupt_handler(InterruptIndex::Timer.as_u8(), timer_interrupt_handler);
+        idt.set_interrupt_handler(InterruptIndex::Keyboard.as_u8(), keyboard_interrupt_handler);
         idt
     };
 }
@@ -36,18 +41,7 @@ lazy_static! {
         spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 }
 
-#[derive(Debug, Clone, Copy)]
-#[repr(u8)]
-pub enum InterruptIndex {
-    Timer = PIC_1_OFFSET,
-    Keyboard,
-}
-
-impl InterruptIndex {
-    fn as_u8(self) -> u8 {
-        self as u8
-    }
-}
+// Exception Handlers
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: ExceptionStackFrame) {
     println!("EXCEPTION: BREAKPOINT ERROR\n{:#?}", stack_frame);
@@ -73,7 +67,22 @@ extern "x86-interrupt" fn page_fault_handler(
         responsible_virtual_address
     );
     println!("EXCEPTION: PAGE FAULT: Stack Frame\n{:#?}", stack_frame);
-    loop {}
+    halt_loop();
+}
+
+// Hardware PIC Interrupt Handlers
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u8)]
+pub enum InterruptIndex {
+    Timer = PIC_1_OFFSET,
+    Keyboard,
+}
+
+impl InterruptIndex {
+    fn as_u8(self) -> u8 {
+        self as u8
+    }
 }
 
 extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFrame) {
@@ -117,15 +126,15 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStac
     }
 }
 
-pub fn init() {
-    INTERRUPT_DESCRIPTOR_TABLE.load();
-}
+// utilities
 
 pub fn invoke_page_fault_exception() {
     unsafe {
         *(0xdeadbeef as *mut u64) = 42;
     };
 }
+
+// Tests
 
 #[allow(unconditional_recursion)]
 pub fn stack_overflow() {

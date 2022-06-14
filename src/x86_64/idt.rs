@@ -1,7 +1,4 @@
-use core::{
-    arch::asm,
-    ops::{Index, Range},
-};
+use core::{arch::asm, ops::Range};
 
 use bit_field::BitField;
 use bitflags::bitflags;
@@ -208,15 +205,52 @@ impl InterruptDescriptorTable {
         &mut self.0[IDT_INDEX_DOUBLE_FAULT_EXCEPTION as usize].options
     }
 
+    /// A page fault can occur during a memory access in any of the following situations:
+    ///
+    /// - A page-translation-table entry or physical page involved in translating the memory
+    ///   access is not present in physical memory. This is indicated by a cleared present
+    ///   bit in the translation-table entry.
+    /// - An attempt is made by the processor to load the instruction TLB with a translation
+    ///   for a non-executable page.
+    /// - The memory access fails the paging-protection checks (user/supervisor, read/write,
+    ///   or both).
+    /// - A reserved bit in one of the page-translation-table entries is set to 1. A `#PF`
+    ///   occurs for this reason only when `CR4.PSE=1` or `CR4.PAE=1`.
+    ///
+    /// The virtual (linear) address that caused the page fault is stored in the `CR2` register.
+    /// The saved instruction pointer points to the instruction that caused the page fault.
+    ///
+    /// The page-fault error code is described by the
+    /// [`PageFaultErrorCode`](struct.PageFaultErrorCode.html) struct.
     pub fn set_page_fault_handler(&mut self, handler_func: PageFaultHandlerFunc) {
         self.0[IDT_INDEX_PAGE_FAULT_EXCEPTION as usize] =
             Entry::new(get_current_code_segment(), handler_func as u64);
     }
 
-    pub fn set_hardware_interrupt(&mut self, index: u8, handler_func: HandlerFunc) {
+    /// User-defined interrupts can be initiated either by system logic or software. They occur
+    /// when:
+    ///
+    /// - System logic signals an external interrupt request to the processor. The signaling
+    ///   mechanism and the method of communicating the interrupt vector to the processor are
+    ///   implementation dependent.
+    /// - Software executes an `INTn` instruction. The `INTn` instruction operand provides
+    ///   the interrupt vector number.
+    ///
+    /// Both methods can be used to initiate an interrupt into vectors 0 through 255. However,
+    /// because vectors 0 through 31 are defined or reserved by the AMD64 architecture,
+    /// software should not use vectors in this range for purposes other than their defined use.
+    ///
+    /// The saved instruction pointer depends on the interrupt source:
+    ///
+    /// - External interrupts are recognized on instruction boundaries. The saved instruction
+    ///   pointer points to the instruction immediately following the boundary where the
+    ///   external interrupt was recognized.
+    /// - If the interrupt occurs as a result of executing the INTn instruction, the saved
+    ///   instruction pointer points to the instruction after the INTn.
+    pub fn set_interrupt_handler(&mut self, index: u8, handler_func: HandlerFunc) {
         if index < NUMBER_OF_EXCEPTION_HANDLERS {
             panic!(
-                "Can't add hardware interrupt handler at inder {}. First {} indicies are reserved
+                "Can't add interrupt handler at index {}. First {} indicies are reserved
                  for specific handlers",
                 index,
                 NUMBER_OF_EXCEPTION_HANDLERS - 1
