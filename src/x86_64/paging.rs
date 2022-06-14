@@ -2,7 +2,7 @@ use core::{fmt, ops::Index};
 
 use bitflags::bitflags;
 
-use super::addr::PhysicalAddress;
+use super::address::PhysicalAddress;
 
 const ENTRY_COUNT: usize = 512;
 
@@ -119,12 +119,17 @@ impl PageTableFrame {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PageOffset(u16);
 
 impl PageOffset {
     pub fn new_truncate(offset: u16) -> PageOffset {
         PageOffset(offset % (1 << 12))
+    }
+
+    #[cfg(test)]
+    pub fn from_raw(index: u16) -> PageOffset {
+        PageOffset(index)
     }
 }
 
@@ -134,11 +139,16 @@ impl From<PageOffset> for u64 {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PageTableIndex(u16);
 
 impl PageTableIndex {
     pub fn new_truncate(index: u16) -> PageTableIndex {
         PageTableIndex(index % (1 << 9))
+    }
+
+    #[cfg(test)]
+    pub fn from_raw(index: u16) -> PageTableIndex {
+        PageTableIndex(index)
     }
 }

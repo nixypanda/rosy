@@ -4,7 +4,7 @@ use bit_field::BitField;
 use bitflags::bitflags;
 
 use super::{
-    addr::VirtualAddress, descriptor::DescriptorTablePointer,
+    address::VirtualAddress, descriptor::DescriptorTablePointer,
     segmentation::get_current_code_segment,
 };
 

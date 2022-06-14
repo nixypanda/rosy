@@ -1,4 +1,4 @@
-use super::{addr::VirtualAddress, tss::TaskStateSegment};
+use super::{address::VirtualAddress, tss::TaskStateSegment};
 use bit_field::BitField;
 use bitflags::bitflags;
 

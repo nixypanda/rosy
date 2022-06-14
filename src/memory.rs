@@ -1,7 +1,7 @@
 //! Memory related operations
 
 use crate::x86_64::{
-    addr::{PhysicalAddress, VirtualAddress},
+    address::{PhysicalAddress, VirtualAddress},
     instructions::read_control_register_3,
     paging::PageTable,
 };

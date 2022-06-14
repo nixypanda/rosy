@@ -1,6 +1,6 @@
 use core::arch::asm;
 
-use super::{addr::VirtualAddress, segmentation::SegmentSelector};
+use super::{address::VirtualAddress, segmentation::SegmentSelector};
 
 const NUMBER_OF_PRIVILEGE_LEVELS: usize = 3;
 const NUMBER_OF_INTERRUPT_STACKS: usize = 7;

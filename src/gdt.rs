@@ -1,7 +1,7 @@
 use lazy_static::lazy_static;
 
 use crate::x86_64::{
-    addr::VirtualAddress,
+    address::VirtualAddress,
     descriptor::Descriptor,
     gdt::GlobalDescriptorTable,
     segmentation::{set_code_segment_selector, SegmentSelector},

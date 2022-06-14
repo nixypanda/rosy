@@ -1,4 +1,4 @@
-pub mod addr;
+pub mod address;
 pub mod descriptor;
 pub mod gdt;
 pub mod idt;

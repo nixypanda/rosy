@@ -2,7 +2,7 @@ use bitflags::bitflags;
 use core::arch::asm;
 
 use super::{
-    addr::{PhysicalAddress, VirtualAddress},
+    address::{PhysicalAddress, VirtualAddress},
     paging::PageTableFrame,
 };
 

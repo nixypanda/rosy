@@ -11,7 +11,7 @@ use rosy::{
     print, println,
     utils::halt_loop,
     x86_64::{
-        addr::VirtualAddress,
+        address::VirtualAddress,
         instructions::read_control_register_3,
         interrupts::invoke_breakpoint_exception,
         paging::{PageTable, PageTableFrame},

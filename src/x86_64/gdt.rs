@@ -1,7 +1,7 @@
 use core::arch::asm;
 
 use super::{
-    addr::VirtualAddress,
+    address::VirtualAddress,
     descriptor::{Descriptor, DescriptorFlags, DescriptorTablePointer},
     privilege_level::PrivilegeLevel,
     segmentation::SegmentSelector,
