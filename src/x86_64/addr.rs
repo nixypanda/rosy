@@ -68,6 +68,16 @@ impl VirtualAddress {
     pub fn as_u64(&self) -> u64 {
         self.0
     }
+
+    #[cfg(target_pointer_width = "64")]
+    pub fn as_ptr<T>(&self) -> *const T {
+        self.0 as *const T
+    }
+
+    #[cfg(target_pointer_width = "64")]
+    pub fn as_mut_ptr<T>(self) -> *mut T {
+        self.as_ptr::<T>() as *mut T
+    }
 }
 
 impl Add<usize> for VirtualAddress {
@@ -116,6 +126,17 @@ impl PhysicalAddress {
     #[cfg(target_pointer_width = "64")]
     pub fn as_mut_ptr<T>(self) -> *mut T {
         self.as_ptr::<T>() as *mut T
+    }
+
+    pub fn align_down(&self, alignment: u64) -> PhysicalAddress {
+        if !alignment.is_power_of_two() {
+            panic!("alignment must be a power of two");
+        }
+        PhysicalAddress::new(self.0 & !(alignment - 1))
+    }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
     }
 }
 

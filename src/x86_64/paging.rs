@@ -52,6 +52,11 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FrameError {
+    FrameNotPresent,
+}
+
 impl PageTableEntry {
     pub fn new() -> PageTableEntry {
         PageTableEntry { entry: 0 }
@@ -68,6 +73,14 @@ impl PageTableEntry {
     pub fn is_unused(&self) -> bool {
         self.entry == 0
     }
+
+    pub fn frame(&self) -> Result<PageTableFrame, FrameError> {
+        if !self.flags().contains(PageTableEntryFlags::PRESENT) {
+            Err(FrameError::FrameNotPresent)
+        } else {
+            Ok(PageTableFrame::containing_address(self.address()))
+        }
+    }
 }
 
 impl fmt::Debug for PageTableEntry {
@@ -76,5 +89,23 @@ impl fmt::Debug for PageTableEntry {
         f.field("addr", &self.address());
         f.field("flags", &self.flags());
         f.finish()
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(C)]
+pub struct PageTableFrame {
+    start_address: PhysicalAddress,
+}
+
+impl PageTableFrame {
+    pub fn containing_address(address: PhysicalAddress) -> PageTableFrame {
+        PageTableFrame {
+            start_address: address.align_down(4096),
+        }
+    }
+
+    pub fn start_address(&self) -> PhysicalAddress {
+        self.start_address
     }
 }
