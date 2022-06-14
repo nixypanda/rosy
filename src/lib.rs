@@ -19,6 +19,12 @@ use core::panic::PanicInfo;
 
 use x86_64::port::Port;
 
+#[cfg(test)]
+use bootloader::{entry_point, BootInfo};
+
+#[cfg(test)]
+entry_point!(test_kernel_main);
+
 pub fn init() {
     crate::gdt::init();
     crate::interrupt::init();
@@ -40,11 +46,13 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
 
 #[cfg(test)]
 #[no_mangle]
-pub extern "C" fn _start() -> ! {
+pub fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+    use utils::halt_loop;
+
     init();
     test_main();
 
-    loop {}
+    halt_loop();
 }
 
 pub trait Testable {

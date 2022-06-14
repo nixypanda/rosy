@@ -4,7 +4,7 @@
 #![test_runner(rosy::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
-use bootloader::BootInfo;
+use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
     print, println,
@@ -12,8 +12,9 @@ use rosy::{
     x86_64::{instructions::read_control_register_3, paging::PageTable},
 };
 
-#[no_mangle]
-pub extern "C" fn _start(boot_info: &'static BootInfo) -> ! {
+entry_point!(kernel_main);
+
+pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     println!("Hello World!");
 
     rosy::init();
