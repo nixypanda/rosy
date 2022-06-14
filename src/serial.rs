@@ -45,6 +45,29 @@ macro_rules! serial_print {
 macro_rules! serial_println {
     () => ($crate::serial_print!("\n"));
     ($fmt:expr) => ($crate::serial_print!(concat!($fmt, "\n")));
-    ($fmt:expr, $($arg:tt)*) => ($crate::serial_print!(
-        concat!($fmt, "\n"), $($arg)*));
+    ($fmt:expr, $($arg:tt)*) => (
+        $crate::serial_print!(concat!($fmt, "\n"), $($arg)*)
+    );
+}
+
+/// Prints to the host through the serial interface using green coloring
+#[macro_export]
+macro_rules! serial_success {
+    ($fmt:expr) => {
+        $crate::serial_print!(concat!("\x1b[92m", $fmt, "\x1b[0m"))
+    };
+    ($fmt:expr, $($arg:tt)*) => (
+        $crate::serial_print!(concat!("\x1b[92m", $fmt, "\x1b[0m"), $($arg)*)
+    );
+}
+
+/// Prints to the host through the serial interface using red coloring
+#[macro_export]
+macro_rules! serial_error {
+    ($fmt:expr) => {
+        $crate::serial_print!(concat!("\x1b[91m", $fmt, "\x1b[0m"))
+    };
+    ($fmt:expr, $($arg:tt)*) => (
+        $crate::serial_print!(concat!("\x1b[91m", $fmt, "\x1b[0m"), $($arg)*)
+    );
 }

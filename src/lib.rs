@@ -38,8 +38,10 @@ pub fn init() {
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
-    serial_println!("[Failed]");
-    serial_println!("Error: {}", info);
+    serial_error!("[Failed]");
+    serial_println!();
+    serial_error!("Error: {}", info);
+    serial_println!();
     exit_qemu(QemuExitCode::Failed);
 
     loop {}
@@ -67,7 +69,8 @@ where
     fn run(&self) {
         serial_print!("{}...\t", core::any::type_name::<T>());
         self();
-        serial_println!("[ok]");
+        serial_success!("[ok]");
+        serial_println!();
     }
 }
 
