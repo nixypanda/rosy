@@ -8,6 +8,7 @@
 pub mod gdt;
 pub mod interrupt;
 pub mod keyboard;
+pub mod memory;
 pub mod pic8258;
 pub mod serial;
 pub mod utils;

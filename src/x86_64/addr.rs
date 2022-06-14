@@ -64,6 +64,10 @@ impl VirtualAddress {
     pub fn from_ptr<T>(ptr: *const T) -> Self {
         Self::new(ptr as u64)
     }
+
+    pub fn as_u64(&self) -> u64 {
+        self.0
+    }
 }
 
 impl Add<usize> for VirtualAddress {

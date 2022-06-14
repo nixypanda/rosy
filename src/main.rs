@@ -7,9 +7,10 @@
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
+    memory::active_level4_page_table,
     print, println,
     utils::halt_loop,
-    x86_64::{instructions::read_control_register_3, paging::PageTable},
+    x86_64::{addr::VirtualAddress, instructions::read_control_register_3, paging::PageTable},
 };
 
 entry_point!(kernel_main);
@@ -26,15 +27,9 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     );
 
     println!("{:?}", boot_info.physical_memory_offset);
-    let base_page_table_virtual_address =
-        base_page_table_address + boot_info.physical_memory_offset;
 
-    println!("{:?}", base_page_table_virtual_address);
-
-    let page_table: &PageTable = unsafe {
-        let page_table_pointer: *mut PageTable = base_page_table_virtual_address.as_mut_ptr();
-        &*page_table_pointer
-    };
+    let physical_memory_offset = VirtualAddress::new(boot_info.physical_memory_offset);
+    let page_table: &PageTable = unsafe { active_level4_page_table(physical_memory_offset) };
 
     for (index, entry) in page_table.iter().enumerate() {
         if !entry.is_unused() {
