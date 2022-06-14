@@ -1,9 +1,10 @@
 use lazy_static::lazy_static;
 
 use crate::{
+    error, errorln,
     gdt::INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT,
     pic8258::ChainedPics,
-    print, println,
+    print,
     utils::halt_loop,
     x86_64::{
         idt::{ExceptionStackFrame, InterruptDescriptorTable, PageFaultErrorCode},
@@ -44,14 +45,15 @@ lazy_static! {
 // Exception Handlers
 
 extern "x86-interrupt" fn breakpoint_handler(stack_frame: ExceptionStackFrame) {
-    println!("EXCEPTION: BREAKPOINT ERROR\n{:#?}", stack_frame);
+    errorln!("EXCEPTION: BREAKPOINT ERROR\n{:#?}", stack_frame);
 }
 
 extern "x86-interrupt" fn double_fault_handler(
     stack_frame: ExceptionStackFrame,
     _error_code: u64,
 ) -> ! {
-    panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+    errorln!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
+    halt_loop();
 }
 
 extern "x86-interrupt" fn page_fault_handler(
@@ -60,13 +62,13 @@ extern "x86-interrupt" fn page_fault_handler(
 ) {
     let responsible_virtual_address = read_control_register_2();
 
-    println!("EXCEPTION: PAGE FAULT");
-    println!("EXCEPTION: PAGE FAULT: Error Code: {:?}", error_code);
-    println!(
+    errorln!("EXCEPTION: PAGE FAULT");
+    errorln!("EXCEPTION: PAGE FAULT: Error Code: {:?}", error_code);
+    errorln!(
         "EXCEPTION: PAGE FAULT: Virtual address responsible {:?}",
         responsible_virtual_address
     );
-    println!("EXCEPTION: PAGE FAULT: Stack Frame\n{:#?}", stack_frame);
+    errorln!("EXCEPTION: PAGE FAULT: Stack Frame\n{:#?}", stack_frame);
     halt_loop();
 }
 

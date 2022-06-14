@@ -14,6 +14,12 @@ const VGA_SEGMENT_START: usize = 0xb8000;
 lazy_static! {
     pub static ref DEFAULT_COLOR_CODE: ColorCode = ColorCode::new(Color::White, Color::Black);
 }
+lazy_static! {
+    pub static ref ERROR_COLOR_CODE: ColorCode = ColorCode::new(Color::Red, Color::Black);
+}
+lazy_static! {
+    pub static ref SUCCESS_COLOR_CODE: ColorCode = ColorCode::new(Color::Green, Color::Black);
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,6 +195,22 @@ macro_rules! print {
     ($($arg:tt)*) => (
         $crate::vga_buffer::_print(
             *$crate::vga_buffer::DEFAULT_COLOR_CODE,
+            format_args!($($arg)*)
+        )
+    );
+}
+
+#[macro_export]
+macro_rules! errorln {
+    () => (error!("\n"));
+    ($($arg:tt)*) => (error!("{}\n", format_args!($($arg)*)));
+}
+
+#[macro_export]
+macro_rules! error {
+    ($($arg:tt)*) => (
+        $crate::vga_buffer::_print(
+            *$crate::vga_buffer::ERROR_COLOR_CODE,
             format_args!($($arg)*)
         )
     );
