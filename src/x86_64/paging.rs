@@ -108,7 +108,7 @@ pub struct PageTableFrame {
 }
 
 impl PageTableFrame {
-    pub fn containing_address(address: PhysicalAddress) -> PageTableFrame {
+    pub fn containing_address(address: PhysicalAddress) -> Self {
         PageTableFrame {
             start_address: address.align_down(4096),
         }
@@ -116,6 +116,13 @@ impl PageTableFrame {
 
     pub fn start_address(&self) -> PhysicalAddress {
         self.start_address
+    }
+
+    #[cfg(test)]
+    pub fn from_raw(address: PhysicalAddress) -> Self {
+        PageTableFrame {
+            start_address: address,
+        }
     }
 }
 

@@ -6,6 +6,9 @@ use super::{
     paging::PageTableFrame,
 };
 
+const CR3_PHYSICAL_ADDRESS_MASK: u64 = 0x000f_ffff_ffff_f000;
+const CR3_FLAGS_MASK: u64 = 0xfff;
+
 pub fn halt_cpu_till_next_interrupt() {
     unsafe {
         asm!("hlt", options(nomem, nostack, preserves_flags));
@@ -35,9 +38,25 @@ pub fn read_control_register_3() -> (PageTableFrame, Cr3Flags) {
     unsafe {
         asm!("mov {}, cr3", out(reg) cr3, options(nomem, nostack, preserves_flags));
     }
-    let physical_adderss = PhysicalAddress::new(cr3 & 0x_000f_ffff_ffff_f000);
-    let flags = Cr3Flags::from_bits_truncate(cr3 & 0xfff);
-    let page_table_frame = PageTableFrame::containing_address(physical_adderss);
+    u64_to_page_table_frame_and_cr3_flags(cr3)
+}
+
+fn u64_to_page_table_frame_and_cr3_flags(value: u64) -> (PageTableFrame, Cr3Flags) {
+    let physical_address = PhysicalAddress::new(value & CR3_PHYSICAL_ADDRESS_MASK);
+    let flags = Cr3Flags::from_bits_truncate(value & CR3_FLAGS_MASK);
+    let page_table_frame = PageTableFrame::containing_address(physical_address);
 
     (page_table_frame, flags)
+}
+
+#[test_case]
+fn test_u64_to_page_table_frame_and_cr3_flags() {
+    let address: u64 = 0x0123_4567_89abc_def0;
+
+    let (page_table_frame, flags) = u64_to_page_table_frame_and_cr3_flags(address);
+    assert_eq!(
+        page_table_frame,
+        PageTableFrame::from_raw(PhysicalAddress::from_raw(0x0000_4567_89abc_d000))
+    );
+    assert_eq!(flags, Cr3Flags::PAGE_LEVEL_CACHE_DISABLE);
 }
