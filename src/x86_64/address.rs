@@ -66,7 +66,7 @@ impl VirtualAddress {
     pub fn new_truncate(addr: u64) -> Self {
         // By doing the right shift as a signed operation (on a i64), it will
         // sign extend the value, repeating the leftmost bit.
-        let len = VIRTUAL_ADDRESS_SIGN_EXTENSION_RANGE.len();
+        let len = VIRTUAL_ADDRESS_SIGN_EXTENSION_RANGE.len() - 1;
         Self(((addr << len) as i64 >> len) as u64)
     }
 
