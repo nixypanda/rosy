@@ -3,7 +3,7 @@
 use crate::x86_64::{
     address::{PhysicalAddress, VirtualAddress},
     instructions::read_control_register_3,
-    paging::PageTable,
+    paging::{FrameError, PageTable},
 };
 
 /// Get the level 4 page table
@@ -44,7 +44,8 @@ pub fn translate_address(
         let entry = &table[index];
         frame = match entry.frame() {
             Ok(frame) => frame,
-            Err(_) => return None,
+            Err(FrameError::FrameNotPresent) => return None,
+            Err(FrameError::HugeFrame) => panic!("huge pages not supported"),
         };
     }
 

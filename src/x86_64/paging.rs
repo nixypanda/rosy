@@ -64,6 +64,7 @@ bitflags! {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FrameError {
     FrameNotPresent,
+    HugeFrame,
 }
 
 impl PageTableEntry {
@@ -86,6 +87,8 @@ impl PageTableEntry {
     pub fn frame(&self) -> Result<PageTableFrame, FrameError> {
         if !self.flags().contains(PageTableEntryFlags::PRESENT) {
             Err(FrameError::FrameNotPresent)
+        } else if self.flags().contains(PageTableEntryFlags::HUGE_PAGE) {
+            Err(FrameError::HugeFrame)
         } else {
             Ok(PageTableFrame::containing_address(self.address()))
         }
