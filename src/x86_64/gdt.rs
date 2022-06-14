@@ -2,12 +2,16 @@ use core::arch::asm;
 
 use super::{
     address::VirtualAddress,
-    descriptor::{Descriptor, DescriptorFlags, DescriptorTablePointer},
+    descriptor::{
+        Descriptor, DescriptorFlags, DescriptorTablePointer, BYTES_IN_SYSTEM_SEGMENT_DESCRIPTOR,
+        BYTES_IN_USER_SEGMENT_DESCRIPTOR,
+    },
     privilege_level::PrivilegeLevel,
     segmentation::SegmentSelector,
 };
 
 const GDT_ENTRY_COUNT: usize = 8;
+const BYTES_IN_GDT_ENTRY: usize = 8;
 
 /// The Global Descriptor Table is a construct used by the x86 processor to configure segmented
 /// virtual memory.
@@ -51,14 +55,16 @@ impl GlobalDescriptorTable {
     pub fn add_entry(&mut self, entry: Descriptor) -> SegmentSelector {
         let index = match entry {
             Descriptor::UserSegment(value) => {
-                if self.next_free > self.table.len().saturating_sub(1) {
+                let size = BYTES_IN_USER_SEGMENT_DESCRIPTOR / BYTES_IN_GDT_ENTRY;
+                if self.next_free > self.table.len().saturating_sub(size) {
                     panic!("GDT full");
                 } else {
                     self.push(value)
                 }
             }
             Descriptor::SystemSegment(low, high) => {
-                if self.next_free > self.table.len().saturating_sub(2) {
+                let size = BYTES_IN_SYSTEM_SEGMENT_DESCRIPTOR / BYTES_IN_GDT_ENTRY;
+                if self.next_free > self.table.len().saturating_sub(size) {
                     panic!("GDT full");
                 } else {
                     let index_low = self.push(low);

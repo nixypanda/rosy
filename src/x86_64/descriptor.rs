@@ -2,6 +2,9 @@ use super::{address::VirtualAddress, tss::TaskStateSegment};
 use bit_field::BitField;
 use bitflags::bitflags;
 
+pub(super) const BYTES_IN_USER_SEGMENT_DESCRIPTOR: usize = 8;
+pub(super) const BYTES_IN_SYSTEM_SEGMENT_DESCRIPTOR: usize = 16;
+
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct DescriptorTablePointer {
