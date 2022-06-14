@@ -12,7 +12,7 @@ const NEWLINE_BYTE: u8 = b'\n';
 const ASCII_FALLBACK: u8 = 0xfe;
 const VGA_SEGMENT_START: usize = 0xb8000;
 lazy_static! {
-    static ref DEFAULT_COLOR_CODE: ColorCode = ColorCode::new(Color::Yellow, Color::Black);
+    pub static ref DEFAULT_COLOR_CODE: ColorCode = ColorCode::new(Color::White, Color::Black);
 }
 
 #[allow(dead_code)]
@@ -48,7 +48,7 @@ enum Color {
 /// | 0x7	 | Light Gray | 0xf	                | White        |
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-struct ColorCode(u8);
+pub struct ColorCode(u8);
 
 impl ColorCode {
     fn new(foregroud: Color, background: Color) -> ColorCode {
@@ -96,9 +96,14 @@ pub struct Writer {
 }
 
 impl Writer {
+    fn with_color_code(&mut self, color_code: ColorCode) -> &mut Self {
+        self.color_code = color_code;
+        self
+    }
+
     pub fn write_string(&mut self, string: &str) {
         for byte in string.as_bytes() {
-            self.write_byte(*byte);
+            self.write_byte(self.color_code, *byte);
         }
     }
 
@@ -112,12 +117,12 @@ impl Writer {
         BUFFER_HEIGHT
     }
 
-    fn write_byte(&mut self, byte: u8) {
+    fn write_byte(&mut self, color_code: ColorCode, byte: u8) {
         match byte {
             // printable ascii characters
-            0x20..=0x7e => self.write_byte_internal(byte),
+            0x20..=0x7e => self.write_byte_internal(color_code, byte),
             NEWLINE_BYTE => self.newline(),
-            _ => self.write_byte_internal(ASCII_FALLBACK),
+            _ => self.write_byte_internal(color_code, ASCII_FALLBACK),
         }
     }
 
@@ -141,14 +146,13 @@ impl Writer {
         }
     }
 
-    fn write_byte_internal(&mut self, byte: u8) {
+    fn write_byte_internal(&mut self, color_code: ColorCode, byte: u8) {
         if self.col_position >= BUFFER_WIDTH {
             self.newline()
         }
 
         let row = BUFFER_HEIGHT - 1;
         let col = self.col_position;
-        let color_code = self.color_code;
         let screen_char = ScreenChar {
             ascii_code_point: byte,
             color_code,
@@ -182,18 +186,27 @@ macro_rules! println {
 
 #[macro_export]
 macro_rules! print {
-    ($($arg:tt)*) => ($crate::vga_buffer::_print(format_args!($($arg)*)));
+    ($($arg:tt)*) => (
+        $crate::vga_buffer::_print(
+            *$crate::vga_buffer::DEFAULT_COLOR_CODE,
+            format_args!($($arg)*)
+        )
+    );
 }
 
 #[doc(hidden)]
-pub fn _print(args: fmt::Arguments) {
+pub fn _print(color_code: ColorCode, args: fmt::Arguments) {
     // Execute without interrupts disables interrupts while executing a piece of code. We use it to
     // ensure that no interrupt cannot occur as long as the Mutex is locked.
     // Hardware interrupts can occur asynchronously while the Mutex is locked. In that situation
     // WRITER is locked the interrupt handler waits on the Mutex to be unlocked. But this never
     // happens as the `_start` is waiting on the interrupt handler to finish.
     execute_without_interrupts(|| {
-        WRITER.lock().write_fmt(args).unwrap();
+        WRITER
+            .lock()
+            .with_color_code(color_code)
+            .write_fmt(args)
+            .unwrap();
     });
 }
 
