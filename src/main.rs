@@ -7,12 +7,13 @@
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
-    memory::active_level4_page_table,
+    memory::{active_level4_page_table, translate_address},
     print, println,
     utils::halt_loop,
     x86_64::{
         addr::VirtualAddress,
         instructions::read_control_register_3,
+        interrupts::invoke_breakpoint_exception,
         paging::{PageTable, PageTableFrame},
     },
 };
@@ -58,6 +59,27 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
                 }
             }
         }
+    }
+
+    let phys_mem_offset = VirtualAddress::new(boot_info.physical_memory_offset);
+
+    invoke_breakpoint_exception();
+
+    let addresses = [
+        // the identity-mapped vga buffer page
+        0xb8000,
+        // some code page
+        0x210281,
+        // some stack page
+        0x0100_0020_1958,
+        // virtual address mapped to physical address 0
+        boot_info.physical_memory_offset,
+    ];
+
+    for &address in &addresses {
+        let virt = VirtualAddress::new(address);
+        let phys = translate_address(virt, phys_mem_offset);
+        println!("{:?} -> {:?}", virt, phys);
     }
 
     #[cfg(test)]

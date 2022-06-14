@@ -1,7 +1,10 @@
 use bitflags::bitflags;
 use core::arch::asm;
 
-use super::addr::{PhysicalAddress, VirtualAddress};
+use super::{
+    addr::{PhysicalAddress, VirtualAddress},
+    paging::PageTableFrame,
+};
 
 pub fn halt_cpu_till_next_interrupt() {
     unsafe {
@@ -27,13 +30,14 @@ bitflags! {
     }
 }
 
-pub fn read_control_register_3() -> (PhysicalAddress, Cr3Flags) {
+pub fn read_control_register_3() -> (PageTableFrame, Cr3Flags) {
     let mut cr3: u64;
     unsafe {
         asm!("mov {}, cr3", out(reg) cr3, options(nomem, nostack, preserves_flags));
     }
     let physical_adderss = PhysicalAddress::new(cr3 & 0x_000f_ffff_ffff_f000);
     let flags = Cr3Flags::from_bits_truncate(cr3 & 0xfff);
+    let page_table_frame = PageTableFrame::containing_address(physical_adderss);
 
-    (physical_adderss, flags)
+    (page_table_frame, flags)
 }

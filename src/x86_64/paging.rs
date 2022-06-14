@@ -1,4 +1,4 @@
-use core::fmt;
+use core::{fmt, ops::Index};
 
 use bitflags::bitflags;
 
@@ -16,6 +16,15 @@ impl PageTable {
         self.entries.iter()
     }
 }
+
+impl Index<PageTableIndex> for PageTable {
+    type Output = PageTableEntry;
+
+    fn index(&self, index: PageTableIndex) -> &Self::Output {
+        &self.entries[index.0 as usize]
+    }
+}
+
 pub struct PageTableEntry {
     entry: u64,
 }
@@ -92,7 +101,7 @@ impl fmt::Debug for PageTableEntry {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct PageTableFrame {
     start_address: PhysicalAddress,
@@ -107,5 +116,29 @@ impl PageTableFrame {
 
     pub fn start_address(&self) -> PhysicalAddress {
         self.start_address
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PageOffset(u16);
+
+impl PageOffset {
+    pub fn new_truncate(offset: u16) -> PageOffset {
+        PageOffset(offset % (1 << 12))
+    }
+}
+
+impl From<PageOffset> for u64 {
+    fn from(offset: PageOffset) -> Self {
+        u64::from(offset.0)
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct PageTableIndex(u16);
+
+impl PageTableIndex {
+    pub fn new_truncate(index: u16) -> PageTableIndex {
+        PageTableIndex(index % (1 << 9))
     }
 }

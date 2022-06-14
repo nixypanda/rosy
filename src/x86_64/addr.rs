@@ -2,6 +2,8 @@ use core::{fmt, ops::Add};
 
 use bit_field::BitField;
 
+use super::paging::{PageOffset, PageTableIndex};
+
 /// A canonical 64-bit virtual memory address.
 ///
 /// This is a wrapper type around an `u64`, so it is always 8 bytes, even when compiled
@@ -78,12 +80,32 @@ impl VirtualAddress {
     pub fn as_mut_ptr<T>(self) -> *mut T {
         self.as_ptr::<T>() as *mut T
     }
+
+    pub fn page_offset(self) -> PageOffset {
+        PageOffset::new_truncate(self.0 as u16)
+    }
+
+    pub fn p1_index(self) -> PageTableIndex {
+        PageTableIndex::new_truncate((self.0 >> 12) as u16)
+    }
+
+    pub fn p2_index(self) -> PageTableIndex {
+        PageTableIndex::new_truncate((self.0 >> 12 >> 9) as u16)
+    }
+
+    pub fn p3_index(self) -> PageTableIndex {
+        PageTableIndex::new_truncate((self.0 >> 12 >> 9 >> 9) as u16)
+    }
+
+    pub fn p4_index(self) -> PageTableIndex {
+        PageTableIndex::new_truncate((self.0 >> 12 >> 9 >> 9 >> 9) as u16)
+    }
 }
 
-impl Add<usize> for VirtualAddress {
+impl Add<u64> for VirtualAddress {
     type Output = Self;
 
-    fn add(self, rhs: usize) -> Self::Output {
+    fn add(self, rhs: u64) -> Self::Output {
         VirtualAddress::new(self.0 + rhs as u64)
     }
 }
