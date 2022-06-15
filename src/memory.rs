@@ -41,7 +41,9 @@ pub fn translate_address(
     let entry = &l3_table[address.p3_index()];
     let l3_frame: MappedFrame = entry.frame(PageTableLevel::Level3).ok()?;
     if entry.has_huge_frame() {
-        return Some(l3_frame.start_address() + (address.as_u64() & 0o000_000_777_777_7777));
+        return Some(
+            l3_frame.start_address() + (u64::from(address.page_offset(PageTableLevel::Level3))),
+        );
     }
 
     let l2_virtual_address = physical_memory_offset + l3_frame.start_address().as_u64();
@@ -49,7 +51,9 @@ pub fn translate_address(
     let entry = &l2_table[address.p2_index()];
     let l2_frame: MappedFrame = entry.frame(PageTableLevel::Level2).ok()?;
     if entry.has_huge_frame() {
-        return Some(l2_frame.start_address() + (address.as_u64() & 0o000_000_000_777_7777));
+        return Some(
+            l2_frame.start_address() + (u64::from(address.page_offset(PageTableLevel::Level2))),
+        );
     }
 
     let l1_virtual_address = physical_memory_offset + l2_frame.start_address().as_u64();

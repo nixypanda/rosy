@@ -130,7 +130,7 @@ where
 {
     pub fn new_truncate(offset: u32) -> Self {
         PageOffset {
-            offset: (offset % (1 << 12)),
+            offset: (offset % (1 << S::BITS)),
             _phantom: PhantomData,
         }
     }
