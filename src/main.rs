@@ -42,7 +42,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
 
     let phys_mem_offset = VirtualAddress::new(boot_info.physical_memory_offset);
-    let offset_memory_mapper = OffsetMemoryMapper::new(phys_mem_offset);
+    let offset_memory_mapper = unsafe { OffsetMemoryMapper::new(phys_mem_offset) };
 
     let addresses = [
         // the identity-mapped vga buffer page

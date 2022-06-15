@@ -9,6 +9,7 @@ use super::{
 
 const ENTRY_COUNT: usize = 512;
 
+/// Representation of a page table
 #[repr(C, align(4096))]
 pub struct PageTable {
     entries: [PageTableEntry; ENTRY_COUNT],
@@ -28,6 +29,8 @@ impl Index<PageTableIndex> for PageTable {
     }
 }
 
+/// 64-bit page table entry
+#[repr(transparent)]
 pub struct PageTableEntry {
     entry: u64,
 }
@@ -85,6 +88,15 @@ impl PageTableEntry {
         self.flags().contains(PageTableEntryFlags::HUGE_PAGE)
     }
 
+    /// Returns the physical frame mapped by this entry.
+    ///
+    /// Returns the following errors:
+    ///
+    /// - `FrameError::FrameNotPresent` if the entry doesn't have the `PRESENT` flag set.
+    ///
+    /// # Panics
+    /// If the entry has the `HUGE_PAGE` flag set when the provided PageLevel is 4 or 1 it panics
+    /// as this is not a valid mapping.
     pub fn frame(&self, entry_level: PageTableLevel) -> Result<MappedFrame, FrameError> {
         if !self.flags().contains(PageTableEntryFlags::PRESENT) {
             Err(FrameError::FrameNotPresent)
@@ -118,6 +130,11 @@ impl fmt::Debug for PageTableEntry {
     }
 }
 
+/// Represents a SIZE-bit offset into a SIZE page table.
+///
+/// - For `PageSize::Page4KiB` this is a 12-bit offset. Can only every contain 0-4095.
+/// - For `PageSize::Page2MiB` this is a 21-bit offset. Can only every contain 0-2097151.
+/// - For `PageSize::Page1GiB` this is a 30-bit offset. Can only every contain 0-1073741823.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PageOffset<S>
 where
@@ -131,6 +148,11 @@ impl<S> PageOffset<S>
 where
     S: PageSize,
 {
+    /// Create a new `PageOffset` with the given offset of `u32`. Throws away the bits if the value
+    /// is
+    /// >= 4096 for `PageSize::Page4KiB`
+    /// >= 2097152 for `PageSize::Page2MiB`
+    /// >= 1073741823 for `PageSize::Page1GiB`
     pub fn new_truncate(offset: u32) -> Self {
         PageOffset {
             offset: (offset % (1 << S::BITS)),
@@ -156,12 +178,13 @@ where
     }
 }
 
+/// A 9-bit index into a page table used to access a page table entry from the 512 possible entries
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PageTableIndex(u16);
 
 impl PageTableIndex {
     pub fn new_truncate(index: u16) -> PageTableIndex {
-        PageTableIndex(index % (1 << 9))
+        PageTableIndex(index % ENTRY_COUNT as u16)
     }
 
     #[cfg(test)]
@@ -170,11 +193,13 @@ impl PageTableIndex {
     }
 }
 
+/// Trait for abstracting over the three possible page sizes on x86_64, 4KiB, 2MiB, 1GiB.
 pub trait PageSize {
     const SIZE: u64;
     const BITS: usize;
 }
 
+/// Standard Page
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Size4KiB {}
 
@@ -183,6 +208,7 @@ impl PageSize for Size4KiB {
     const BITS: usize = 12;
 }
 
+/// Huge Page
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Size2MiB {}
 
@@ -191,6 +217,8 @@ impl PageSize for Size2MiB {
     const BITS: usize = 21;
 }
 
+/// Giant Page.
+/// Only available in the newer x86_64 processors
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Size1GiB {}
 
@@ -199,13 +227,12 @@ impl PageSize for Size1GiB {
     const BITS: usize = 30;
 }
 
-// Not implementing support for 1GiB pages
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FrameError {
     FrameNotPresent,
 }
 
+/// Physical Memory Frame
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(C)]
 pub struct PageTableFrame<S>
@@ -220,6 +247,7 @@ impl<S> PageTableFrame<S>
 where
     S: PageSize,
 {
+    /// Returns the frame that contains the given address.
     pub fn containing_address(address: PhysicalAddress) -> Self {
         PageTableFrame {
             start_address: address.align_down(S::SIZE),
@@ -297,13 +325,28 @@ pub enum PageTableLevel {
     Level4,
 }
 
+/// A Mapper implementation that requires that the complete physically memory is mapped at some
+/// offset in the virtual address space.
 pub struct OffsetMemoryMapper {
     physical_memory_offset: VirtualAddress,
     l4_table_address: PageTableFrame<Size4KiB>,
 }
 
 impl OffsetMemoryMapper {
-    pub fn new(physical_memory_offset: VirtualAddress) -> Self {
+    /// Creates a new `OffsetPageTable` that uses the given offset for converting virtual
+    /// to physical addresses.
+    ///
+    /// The complete physical memory must be mapped in the virtual address space starting at
+    /// address `phys_offset`. This means that for example physical address `0x5000` can be
+    /// accessed through virtual address `phys_offset + 0x5000`. This mapping is required because
+    /// the mapper needs to access page tables, which are not mapped into the virtual address
+    /// space by default.
+    ///
+    /// ## Safety
+    ///
+    /// This function is unsafe because the caller must guarantee that the passed `phys_offset`
+    /// is correct.
+    pub unsafe fn new(physical_memory_offset: VirtualAddress) -> Self {
         let (level4_table_physical_address, _) = read_control_register_3();
         OffsetMemoryMapper {
             physical_memory_offset,
@@ -311,11 +354,16 @@ impl OffsetMemoryMapper {
         }
     }
 
-    unsafe fn frame_to_pointer(&self, frame: MappedFrame) -> *mut PageTable {
-        let virtual_address = self.physical_memory_offset + frame.start_address().as_u64();
-        virtual_address.as_mut_ptr()
-    }
-
+    /// Return the physical address that the given virtual address is mapped to.
+    ///
+    /// If the given address has a valid mapping, the physical address is returned. Otherwise None
+    /// is returned.
+    ///
+    /// This function works with huge pages of all sizes.
+    ///
+    /// # Panics
+    /// If for some reason it detects there is a frame that is huge at level 4 or level 1 it will
+    /// panic as these ase impossible states to be in
     pub fn translate_address(&self, address: VirtualAddress) -> Option<PhysicalAddress> {
         let cr3_frame = MappedFrame::Normal(self.l4_table_address);
 
@@ -342,5 +390,10 @@ impl OffsetMemoryMapper {
         let l1_frame: MappedFrame = entry.frame(PageTableLevel::Level1).ok()?;
 
         Some(l1_frame.address_at_offset(address.page_offset(PageTableLevel::Level1)))
+    }
+
+    unsafe fn frame_to_pointer(&self, frame: MappedFrame) -> *mut PageTable {
+        let virtual_address = self.physical_memory_offset + frame.start_address().as_u64();
+        virtual_address.as_mut_ptr()
     }
 }
