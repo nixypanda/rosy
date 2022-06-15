@@ -78,17 +78,26 @@ impl PageTableEntry {
         self.entry == 0
     }
 
-    pub fn is_huge(&self) -> bool {
+    pub fn has_huge_frame(&self) -> bool {
         self.flags().contains(PageTableEntryFlags::HUGE_PAGE)
     }
 
-    pub fn frame(&self) -> Result<MappedFrame, FrameError> {
+    pub fn frame(&self, entry_level: PageTableLevel) -> Result<MappedFrame, FrameError> {
         if !self.flags().contains(PageTableEntryFlags::PRESENT) {
             Err(FrameError::FrameNotPresent)
         } else if self.flags().contains(PageTableEntryFlags::HUGE_PAGE) {
-            Ok(MappedFrame::Huge(PageTableFrame::containing_address(
-                self.address(),
-            )))
+            match entry_level {
+                PageTableLevel::Level3 => Ok(MappedFrame::Huge(
+                    PageTableFrame::containing_address(self.address()),
+                )),
+                PageTableLevel::Level2 => Ok(MappedFrame::Giant(
+                    PageTableFrame::containing_address(self.address()),
+                )),
+                _ => panic!(
+                    "Huge page is unsupported at this level {:?}. Impossible state reached",
+                    entry_level,
+                ),
+            }
         } else {
             Ok(MappedFrame::Normal(PageTableFrame::containing_address(
                 self.address(),
@@ -158,12 +167,18 @@ impl PageSize for Size2MiB {
     const SIZE: u64 = 2 * 1024 * 1024;
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Size1GiB {}
+
+impl PageSize for Size1GiB {
+    const SIZE: u64 = 1024 * 1024 * 1024;
+}
+
 // Not implementing support for 1GiB pages
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FrameError {
     FrameNotPresent,
-    // HugeFrame,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -204,6 +219,7 @@ where
 pub enum MappedFrame {
     Normal(PageTableFrame<Size4KiB>),
     Huge(PageTableFrame<Size2MiB>),
+    Giant(PageTableFrame<Size1GiB>),
 }
 
 impl MappedFrame {
@@ -211,6 +227,15 @@ impl MappedFrame {
         match self {
             MappedFrame::Normal(frame) => frame.start_address(),
             MappedFrame::Huge(frame) => frame.start_address(),
+            MappedFrame::Giant(frame) => frame.start_address(),
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PageTableLevel {
+    Level1,
+    Level2,
+    Level3,
+    Level4,
 }
