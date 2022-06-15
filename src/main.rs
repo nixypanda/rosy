@@ -10,25 +10,10 @@ use rosy::{
     memory::{active_level4_page_table, translate_address},
     print, println,
     utils::halt_loop,
-    x86_64::{
-        address::VirtualAddress,
-        instructions::read_control_register_3,
-        interrupts::invoke_breakpoint_exception,
-        paging::{PageTable, PageTableFrame},
-    },
+    x86_64::{address::VirtualAddress, instructions::read_control_register_3, paging::PageTable},
 };
 
 entry_point!(kernel_main);
-
-fn get_table_from_frame(
-    frame: PageTableFrame,
-    physical_memory_offset: u64,
-) -> &'static mut PageTable {
-    let physical_address = frame.start_address().as_u64() + physical_memory_offset;
-    let virtual_address = VirtualAddress::new(physical_address);
-    let table = unsafe { &mut *(virtual_address.as_mut_ptr() as *mut PageTable) };
-    table
-}
 
 pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     println!("Hello World!");
@@ -49,21 +34,10 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     for (index, entry) in l4_page_table.iter().enumerate() {
         if !entry.is_unused() {
             println!("L4 entry {}: {:?}", index, entry);
-
-            let frame = entry.frame().unwrap();
-            let table = get_table_from_frame(frame, boot_info.physical_memory_offset);
-
-            for (index, entry) in table.iter().enumerate() {
-                if !entry.is_unused() {
-                    println!("|---L3 entry {}: {:?}", index, entry);
-                }
-            }
         }
     }
 
     let phys_mem_offset = VirtualAddress::new(boot_info.physical_memory_offset);
-
-    invoke_breakpoint_exception();
 
     let addresses = [
         // the identity-mapped vga buffer page
