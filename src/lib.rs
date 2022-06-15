@@ -1,3 +1,13 @@
+//! A small OS created in Rust. Currently it can
+//!
+//! - Print to the screen
+//! - Handle Breakpoint Exception (INT3)
+//! - Handle Page Fault Exception (PF) [does not do anything special yet, just prints the error]
+//! - Handle Double Fault Exception (DF) [does not do anything special yet, just prints the error]
+//! - Handle Timer interrupts
+//! - Handle Keyboard interrupts (Has support for even Colemak)
+//! - Can translate Virtual addresses to Physical addresses using offset based paging.
+
 #![no_std]
 #![cfg_attr(test, no_main)]
 #![feature(custom_test_frameworks)]

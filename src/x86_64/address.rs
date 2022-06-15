@@ -1,3 +1,5 @@
+//! Physical and Virtaul adddress manipulation
+
 use core::{
     fmt,
     ops::{Add, Range},
@@ -97,6 +99,12 @@ impl VirtualAddress {
         self.as_ptr::<T>() as *mut T
     }
 
+    /// Returns the page offset of this virtual address.
+    ///
+    /// - [`PageTableLevel::Level1`]: The page offset is the lower 12 bits.
+    /// - [`PageTableLevel::Level2`]: The page offset is the lower 21 bits.
+    /// - [`PageTableLevel::Level3`]: The page offset is the lower 30 bits.
+    /// - Panics when is given [`PageTableLevel::Level4`]
     pub fn page_offset(self, level: PageTableLevel) -> MappedPageOffset {
         match level {
             PageTableLevel::Level1 => {
@@ -114,20 +122,24 @@ impl VirtualAddress {
         }
     }
 
+    /// Returns the page table index of level 1 page table
     pub fn p1_index(self) -> PageTableIndex {
         PageTableIndex::new_truncate((self.0 >> OFFSET_BITS) as u16)
     }
 
+    /// Returns the page table index of level 2 page table
     pub fn p2_index(self) -> PageTableIndex {
         PageTableIndex::new_truncate((self.0 >> OFFSET_BITS >> PAGE_TABLE_INDEX_BITS) as u16)
     }
 
+    /// Returns the page table index of level 3 page table
     pub fn p3_index(self) -> PageTableIndex {
         PageTableIndex::new_truncate(
             (self.0 >> OFFSET_BITS >> PAGE_TABLE_INDEX_BITS >> PAGE_TABLE_INDEX_BITS) as u16,
         )
     }
 
+    /// Returns the page table index of level 4 page table
     pub fn p4_index(self) -> PageTableIndex {
         PageTableIndex::new_truncate(
             (self.0

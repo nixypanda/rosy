@@ -1,3 +1,5 @@
+//! Segmentation for x86_64.
+
 use core::arch::asm;
 
 use super::privilege_level::PrivilegeLevel;
@@ -24,10 +26,10 @@ pub fn get_current_code_segment() -> SegmentSelector {
     SegmentSelector(segment)
 }
 
-/// Note this is special since we cannot directly move to [`CS`]; x86 requires the instruction
-/// pointer and [`CS`] to be set at the same time. To do this, we push the new segment selector
-/// and return value onto the stack and use a "far return" (`retfq`) to reload [`CS`] and
-/// continue at the end of our function.
+/// Note this is special since we cannot directly move to code segment; x86 requires the
+/// instruction pointer and code segment to be set at the same time. To do this, we push the new
+/// segment selector and return value onto the stack and use a "far return" (`retfq`) to reload
+/// code segment and continue at the end of our function.
 ///
 /// Note we cannot use a "far call" (`lcall`) or "far jmp" (`ljmp`) to do this because then we
 /// would only be able to jump to 32-bit instruction pointers. Only Intel implements support

@@ -1,3 +1,5 @@
+//! Special x86_64 instructions.
+
 use bitflags::bitflags;
 use core::arch::asm;
 
@@ -9,12 +11,15 @@ use super::{
 const CR3_PHYSICAL_ADDRESS_MASK: u64 = 0x000f_ffff_ffff_f000;
 const CR3_FLAGS_MASK: u64 = 0xfff;
 
+/// Puts the CPU to sleep till it encounters the next interrupt. Calling in a loop can be
+/// significantly less resourse intensive than a busy-loop.
 pub fn halt_cpu_till_next_interrupt() {
     unsafe {
         asm!("hlt", options(nomem, nostack, preserves_flags));
     }
 }
 
+/// Read the current age fault linear address from the CR2 register.
 pub fn read_control_register_2() -> VirtualAddress {
     let mut cr2: u64;
     unsafe {
@@ -33,6 +38,7 @@ bitflags! {
     }
 }
 
+/// Read the current P4 table address from the CR3 register.
 pub fn read_control_register_3() -> (PageTableFrame<Size4KiB>, Cr3Flags) {
     let mut cr3: u64;
     unsafe {

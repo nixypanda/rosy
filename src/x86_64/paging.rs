@@ -1,3 +1,5 @@
+//! Paging for x86_64.
+
 use core::{fmt, marker::PhantomData, ops::Index};
 
 use bitflags::bitflags;
@@ -8,6 +10,7 @@ use super::{
 };
 
 const ENTRY_COUNT: usize = 512;
+const PAGE_TABLE_ENTRY_PHYSICAL_ADDRESS_MASK: u64 = 0x000f_ffff_ffff_f000;
 
 /// Representation of a page table
 #[repr(C, align(4096))]
@@ -77,7 +80,7 @@ impl PageTableEntry {
     }
 
     pub fn address(&self) -> PhysicalAddress {
-        PhysicalAddress::new(self.entry & 0x000f_ffff_ffff_f000)
+        PhysicalAddress::new(self.entry & PAGE_TABLE_ENTRY_PHYSICAL_ADDRESS_MASK)
     }
 
     pub fn is_unused(&self) -> bool {

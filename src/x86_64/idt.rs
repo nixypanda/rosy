@@ -1,3 +1,5 @@
+//! Provides types for the Interrupt Descriptor Table and its entries.
+
 use core::{arch::asm, ops::Range};
 
 use bit_field::BitField;
@@ -45,9 +47,12 @@ const ENTRY_OPTIONS_IST_INDEX_BITS: Range<usize> = 0..3;
 /// - reserved
 pub struct InterruptDescriptorTable([Entry; IDT_SIZE]);
 
+/// An Interrupt Descriptor Table entry.
+///
 /// Each entry in the Interrupt Descriptor Table (IDT) has the following structure.
 ///
 /// | Type	| Name	                   | Description                                              |
+/// | ----- | ------------------------ | -------------------------------------------------------- |
 /// | u16	| Function Pointer [0:15]  | The lower bits of the pointer to the handler function.   |
 /// | u16	| GDT selector	           | Selector of a code segment in the GDT.                   |
 /// | u16	| Options	(see below)    |                                                          |
@@ -66,25 +71,35 @@ struct Entry {
 }
 
 bitflags! {
+    /// Options for an IDT Entry
+    ///
+    /// | Bits  |	Name                           |     Description                                  |
+    /// | ----- | -------------------------------- | ------------------------------------------------ |
+    /// | 0-2   | Interrupt Stack Table Index      | 0: Don’t switch stacks,                          |
+    /// |       |                                  | 1-7: Switch to the n-th stack in the Interrupt   |
+    /// |       |                                  | Stack Table when this handler is called.         |
+    /// | 3-7   | Reserved                         |                                                  |
+    /// | 8     | 0: Interrupt Gate,               | If this bit is 0, interrupts are disabled when   |
+    /// |       | 1: Trap Gate                     | this handler is called.                          |
+    /// | 9-11  | must be one                      |                                                  |
+    /// | 12	| must be zero                     |                                                  |
+    /// | 13‑14	| Descriptor Privilege Level (DPL) | The minimal privilege level required for calling |
+    /// |       |                                  | this handler.                                    |
+    /// | 15	| Present                          |                                                  |
     #[repr(transparent)]
     pub struct EntryOptions: u16 {
-        // | 0-2   | Interrupt Stack Table Index | 0: Don’t switch stacks,                        |
-        // |       |                             | 1-7: Switch to the n-th stack in the Interrupt |
-        // |       |                             | Stack Table when this handler is called.       |
-        // 3 - 7 are Reserved
-        // When this bit is 0, interrupts are disabled when this handler is called.
+        /// When this bit is 0, interrupts are disabled when this handler is called.
         const INTERRUPTS_ENABLED = 1 << 8;
-        // These bits must be set to one
         const BIT_9              = 1 << 9;
         const BIT_10             = 1 << 10;
         const BIT_11             = 1 << 11;
+        /// These bits must be set to one
         const MUST_BE_ONE        = Self::BIT_9.bits | Self::BIT_10.bits | Self::BIT_11.bits;
-        // | 13‑14 | Descriptor Privilege Level (DPL) | The minimal privilege level required |
-        // |       |                                  | for calling this handler.            |
         const DPL_LOW            = 1 << 13;
         const DPL_HIGH           = 1 << 14;
+        ///  The minimal privilege level required for calling this handler.
         const DPL_MASK           = Self::DPL_LOW.bits | Self::DPL_HIGH.bits;
-        // Says that the handler is present.
+        /// Says that the handler is present.
         const PRESENT            = 1 << 15;
     }
 }
@@ -163,12 +178,10 @@ impl InterruptDescriptorTable {
         self.0[index as usize] = Entry::new(get_current_code_segment(), handler_func as u64);
     }
 
-    /// A breakpoint (`#BP`) exception occurs when an `INT3` instruction is executed. The
-    /// `INT3` is normally used by debug software to set instruction breakpoints by replacing
+    /// A breakpoint exception occurs when an `INT3` instruction is executed. The `INT3` is
+    /// normally used by debug software to set instruction breakpoints by replacing
     ///
     /// The saved instruction pointer points to the byte after the `INT3` instruction.
-    ///
-    /// The vector number of the `#BP` exception is 3.
     pub fn set_breakpoint_handler(&mut self, handler_func: HandlerFunc) {
         self.set_handler(IDT_INDEX_BREAKPOINT_EXCEPTION, handler_func);
     }
@@ -178,6 +191,7 @@ impl InterruptDescriptorTable {
     ///
     /// The following combinations result in a double fault:
     ///
+    /// ```text
     /// | First Exception           |	Second Exception         |
     /// |---------------------------|----------------------------|
     /// | Divide-by-zero,           |  Invalid TSS,              |                 
@@ -191,6 +205,7 @@ impl InterruptDescriptorTable {
     /// |                           |  Segment Not Present,      |                        
     /// |                           |  Stack-Segment Fault,      |                           
     /// |                           |  General Protection Fault  |                          
+    ///```
     ///
     /// If a third interrupting event occurs while transferring control to the `#DF` handler, the
     /// processor shuts down.
@@ -259,6 +274,7 @@ impl InterruptDescriptorTable {
         self.set_handler(index, handler_func);
     }
 
+    /// Loads the IDT in the CPU using the `lidt` command.
     pub fn load(&self) {
         use core::mem::size_of;
 
@@ -316,29 +332,30 @@ type PageFaultHandlerFunc = extern "x86-interrupt" fn(ExceptionStackFrame, PageF
 
 bitflags! {
     #[repr(transparent)]
+    /// The page fault error code.
     pub struct PageFaultErrorCode: u64 {
-        // When set, the page fault was caused by a page-protection violation. When not set, it was
-        // caused by a non-present page.
+        /// When set, the page fault was caused by a page-protection violation. When not set, it was
+        /// caused by a non-present page.
         const PROTECTION_VIOLATION     = 1 << 0;
-        // When set, the page fault was caused by a write access. When not set, it was caused by a
-        // read access. Does not necessarily indicate if this was caused by a read or a write
-        // instruction.
+        /// When set, the page fault was caused by a write access. When not set, it was caused by a
+        /// read access. Does not necessarily indicate if this was caused by a read or a write
+        /// instruction.
         const CAUSED_BY_WRITE          = 1 << 1;
-        // When set, the page fault was caused while CPL = 3. Else the fault was caused in
-        // supervisor mode (CPL 0, 1, or 2). This does not necessarily mean that the page fault was
-        // a privilege violation.
+        /// When set, the page fault was caused while CPL = 3. Else the fault was caused in
+        /// supervisor mode (CPL 0, 1, or 2). This does not necessarily mean that the page fault was
+        /// a privilege violation.
         const CAUSED_BY_USER           = 1 << 2;
-        // hen set, one or more page directory entries contain reserved bits which are set to 1.
-        // This only applies when the PSE or PAE flags in CR4 are set to 1
+        /// hen set, one or more page directory entries contain reserved bits which are set to 1.
+        /// This only applies when the PSE or PAE flags in CR4 are set to 1
         const MALFORMED_TABLE          = 1 << 3;
-        // When set, the page fault was caused by an instruction fetch. This only applies when the
-        // No-Execute bit is supported and enabled.
+        /// When set, the page fault was caused by an instruction fetch. This only applies when the
+        /// No-Execute bit is supported and enabled.
         const INSTRUCTION_FETCH        = 1 << 4;
-        // When set, the page fault was caused by a protection-key violation. The PKRU register
-        // (for user-mode accesses) or PKRS MSR (for supervisor-mode accesses) specifies the
-        // protection key rights.
+        /// When set, the page fault was caused by a protection-key violation. The PKRU register
+        /// (for user-mode accesses) or PKRS MSR (for supervisor-mode accesses) specifies the
+        /// protection key rights.
         const PROTECTION_KEY_VIOLATION = 1 << 5;
-        // When set, the page fault was caused by a shadow stack access.
+        /// When set, the page fault was caused by a shadow stack access.
         const CAUSED_BY_SHADOW_STACK   = 1 << 6;
     }
 }

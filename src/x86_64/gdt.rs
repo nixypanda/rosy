@@ -1,3 +1,5 @@
+//! Provides types for the Global Descriptor Table and its entries.
+
 use core::arch::asm;
 
 use super::{
@@ -32,6 +34,7 @@ pub struct GlobalDescriptorTable {
 }
 
 impl GlobalDescriptorTable {
+    /// Creates an empty GDT.
     pub fn new() -> GlobalDescriptorTable {
         GlobalDescriptorTable {
             table: [0; GDT_ENTRY_COUNT],
@@ -39,6 +42,9 @@ impl GlobalDescriptorTable {
         }
     }
 
+    /// Loads the GDT in the CPU using the `lgdt` instruction. This does **not** alter any of the
+    /// segment registers; you **must** (re)load them yourself using [the appropriate
+    /// functions]
     pub fn load(&self) {
         use core::mem::size_of;
 
@@ -52,6 +58,9 @@ impl GlobalDescriptorTable {
         };
     }
 
+    /// Adds the given segment descriptor to the GDT, returning the segment selector.
+    ///
+    /// Panics if the GDT has no free entries left.
     pub fn add_entry(&mut self, entry: Descriptor) -> SegmentSelector {
         let index = match entry {
             Descriptor::UserSegment(value) => {

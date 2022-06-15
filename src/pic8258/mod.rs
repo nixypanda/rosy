@@ -1,7 +1,10 @@
-// The Intel 8259 is a programmable interrupt controller (PIC) introduced in 1976. It has long been
-// replaced by the newer APIC, but its interface is still supported on current systems for
-// backwards compatibility reasons. The 8259 PIC is significantly easier to set up than the APIC.
-// So we have it here
+//! Implementation of Intel 8258 PIC.
+//!
+//! The Intel 8259 is a programmable interrupt controller (PIC) introduced in 1976. It has long
+//! been replaced by the newer APIC, but its interface is still supported on current systems for
+//! backwards compatibility reasons. The 8259 PIC is significantly easier to set up than the APIC.
+//! So we have it here
+
 use crate::x86_64::port::Port;
 
 const NUMBER_OF_PINS: u8 = 8;
@@ -54,22 +57,26 @@ impl ProgrammableInterrupController {
     }
 }
 
-// The 8259 has 8 interrupt lines and several lines for communicating with the CPU. The typical
-// systems back then were equipped with two instances of the 8259 PIC, one primary and one
-// secondary PIC connected to one of the interrupt lines of the primary:
-//
-//                      ____________                          ____________
-// Real Time Clock --> |            |   Timer -------------> |            |
-// ACPI -------------> |            |   Keyboard-----------> |            |      _____
-// Available --------> | Secondary  |----------------------> | Primary    |     |     |
-// Available --------> | Interrupt  |   Serial Port 2 -----> | Interrupt  |---> | CPU |
-// Mouse ------------> | Controller |   Serial Port 1 -----> | Controller |     |_____|
-// Co-Processor -----> |            |   Parallel Port 2/3 -> |            |
-// Primary ATA ------> |            |   Floppy disk -------> |            |
-// Secondary ATA ----> |____________|   Parallel Port 1----> |____________|
-//
-// This graphic shows the typical assignment of interrupt lines. We see that most of the 15 lines
-// have a fixed mapping, e.g. line 4 of the secondary PIC is assigned to the mouse.
+/// Represents chained 8259 PICs.
+///
+/// The 8259 has 8 interrupt lines and several lines for communicating with the CPU. The typical
+/// systems back then were equipped with two instances of the 8259 PIC, one primary and one
+/// secondary PIC connected to one of the interrupt lines of the primary:
+///
+/// ```text
+///                      ____________                          ____________
+/// Real Time Clock --> |            |   Timer -------------> |            |
+/// ACPI -------------> |            |   Keyboard-----------> |            |      _____
+/// Available --------> | Secondary  |----------------------> | Primary    |     |     |
+/// Available --------> | Interrupt  |   Serial Port 2 -----> | Interrupt  |---> | CPU |
+/// Mouse ------------> | Controller |   Serial Port 1 -----> | Controller |     |_____|
+/// Co-Processor -----> |            |   Parallel Port 2/3 -> |            |
+/// Primary ATA ------> |            |   Floppy disk -------> |            |
+/// Secondary ATA ----> |____________|   Parallel Port 1----> |____________|
+/// ```
+///
+/// This graphic shows the typical assignment of interrupt lines. We see that most of the 15 lines
+/// have a fixed mapping, e.g. line 4 of the secondary PIC is assigned to the mouse.
 pub struct ChainedPics {
     primary: ProgrammableInterrupController,
     secondary: ProgrammableInterrupController,
@@ -91,6 +98,9 @@ impl ChainedPics {
         }
     }
 
+    /// Initialize both our PICs.  We initialize them together, at the same time, because it's
+    /// traditional to do so, and because I/O operations might not be instantaneous on older
+    /// processors.
     pub unsafe fn initialize(&mut self) {
         let (primary_mask, secondary_mask) = self.read_masks();
         self.start_initialize_sequence();
@@ -100,8 +110,8 @@ impl ChainedPics {
         self.write_masks(primary_mask, secondary_mask);
     }
 
-    // Prepares the PICs to receive 3 bytes of initialization sequence on their data ports.
-    // The functions `setup_base_offset`, `chain_primary_and_secondary` and `setup_mode` handle the
+    // Prepares the PICs to receive 3 bytes of initialization sequence on their data ports. The
+    // functions `setup_base_offset`, `chain_primary_and_secondary` and `setup_mode` handle the
     // sequence that we will send to the PICs.
     unsafe fn start_initialize_sequence(&self) {
         self.primary.command.write(PIC_INITIALIZATION_COMMAND);
@@ -131,15 +141,19 @@ impl ChainedPics {
         wait_a_few_microseconds();
     }
 
+    /// Reads the interrupt masks of both PICs.
     pub unsafe fn read_masks(&mut self) -> (u8, u8) {
         (self.primary.read_mask(), self.secondary.read_mask())
     }
 
+    /// Writes the interrupt masks of both PICs.
     pub unsafe fn write_masks(&mut self, primary_mask: u8, secondary_mask: u8) {
         self.primary.write_mask(primary_mask);
         self.secondary.write_mask(secondary_mask);
     }
 
+    /// Figure out which (if any) PICs in our chain need to know about this
+    /// interrupt.
     pub unsafe fn notify_end_of_interrupt(&self, interrupt_id: u8) {
         if self.primary.handles_this_interrupt(interrupt_id) {
             self.primary.write_end_of_interrupt();

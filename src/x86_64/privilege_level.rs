@@ -1,3 +1,5 @@
+//! Represents a protection ring level.
+
 /// Represents a protection ring level.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(u8)]

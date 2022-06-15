@@ -1,3 +1,5 @@
+//! The VGA text mode is a simple way to print text to the screen.
+
 use core::fmt::{self, Write};
 
 use lazy_static::lazy_static;
@@ -12,13 +14,12 @@ const NEWLINE_BYTE: u8 = b'\n';
 const ASCII_FALLBACK: u8 = 0xfe;
 const VGA_SEGMENT_START: usize = 0xb8000;
 lazy_static! {
+    /// The default color used for printing. It is White
     pub static ref DEFAULT_COLOR_CODE: ColorCode = ColorCode::new(Color::White, Color::Black);
 }
 lazy_static! {
+    /// The color uset to print errors. It is Red
     pub static ref ERROR_COLOR_CODE: ColorCode = ColorCode::new(Color::Red, Color::Black);
-}
-lazy_static! {
-    pub static ref SUCCESS_COLOR_CODE: ColorCode = ColorCode::new(Color::Green, Color::Black);
 }
 
 #[allow(dead_code)]
@@ -43,6 +44,12 @@ enum Color {
     White = 15,
 }
 
+/// Full VGA color code.
+///
+/// Repesents the background and foregroud color That a character should be printed with.
+///
+/// The following table represents the color codes:
+/// ```
 /// | Number | 	Color     |	Number + Bright Bit	| Bright Color |
 /// | 0x0	 | Black      |	0x8	                | Dark Gray    |
 /// | 0x1	 | Blue	      | 0x9	                | Light Blue   |
@@ -62,12 +69,16 @@ impl ColorCode {
     }
 }
 
+/// Ascii character with a color code.
 ///
+/// The bit structure of the character is:
+/// ```
 /// | Bit(s) |	Value            |
 /// |   0-7  | 	ASCII code point |
-/// |  8-11  |	Foreground color |
-/// | 12-14  |	Background color |
-/// |   15	 |  Blink            |
+/// |  8-11  |	Foreground color | Handled by the [`ColorCode`] struct
+/// | 12-14  |	Background color | Handled by the [`ColorCode`] struct
+/// |   15	 |  Blink            | (Not implemented)
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
 struct ScreenChar {
@@ -85,6 +96,8 @@ impl ScreenChar {
     }
 }
 
+/// Representation of the VGA buffer. It is essentially a matrix of [`ScreenChar`]s. This matrix is
+/// represented as is on the screen.
 #[repr(transparent)]
 struct Buffer {
     // The compiler doesn’t know that we really access VGA buffer memory (instead of normal RAM)
@@ -95,6 +108,19 @@ struct Buffer {
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
 }
 
+/// The Writer writes to the VGA buffer.
+///
+/// The writer will always write to the last line and shift lines up when a line is full (or on
+/// \n). It keeps track of the current position in the last row. The current
+/// foreground and background colors by making use of [`ColorCode`].
+///
+/// # Usage
+/// ```
+/// use vga_buffer::Writer;
+///
+/// let mut writer = Writer::new();
+/// writer.write_string("Hello, world!");
+/// ```
 pub struct Writer {
     col_position: usize,
     color_code: ColorCode,
@@ -107,6 +133,7 @@ impl Writer {
         self
     }
 
+    /// Write a string slice to the VGA buffer.
     pub fn write_string(&mut self, string: &str) {
         for byte in string.as_bytes() {
             self.write_byte(self.color_code, *byte);
@@ -177,6 +204,8 @@ impl Write for Writer {
 }
 
 lazy_static! {
+    /// Global instance of [`Writer`].
+    ///
     pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
         col_position: 0,
         color_code: *DEFAULT_COLOR_CODE,
@@ -184,12 +213,14 @@ lazy_static! {
     });
 }
 
+/// Use [`static@WRITER`] to write to the VGA buffer using [`static@DEFAULT_COLOR_CODE`] with newline
 #[macro_export]
 macro_rules! println {
     () => (print!("\n"));
     ($($arg:tt)*) => (print!("{}\n", format_args!($($arg)*)));
 }
 
+/// Use [`static@WRITER`] to write to the VGA buffer using [`static@DEFAULT_COLOR_CODE`] without newline
 #[macro_export]
 macro_rules! print {
     ($($arg:tt)*) => (
@@ -200,12 +231,14 @@ macro_rules! print {
     );
 }
 
+/// Use [`static@WRITER`] to write to the VGA buffer using [`static@ERROR_COLOR_CODE`] with newline
 #[macro_export]
 macro_rules! errorln {
     () => (error!("\n"));
     ($($arg:tt)*) => (error!("{}\n", format_args!($($arg)*)));
 }
 
+/// Use [`static@WRITER`] to write to the VGA buffer using [`static@ERROR_COLOR_CODE`] without newline
 #[macro_export]
 macro_rules! error {
     ($($arg:tt)*) => (

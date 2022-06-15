@@ -1,3 +1,5 @@
+//! x86_64 specific functions and data structures, and access to various system registers.
+
 pub mod address;
 pub mod descriptor;
 pub mod gdt;

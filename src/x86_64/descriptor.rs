@@ -1,3 +1,5 @@
+//! Descriptor related structs and operations
+
 use super::{address::VirtualAddress, tss::TaskStateSegment};
 use bit_field::BitField;
 use bitflags::bitflags;
@@ -5,6 +7,8 @@ use bitflags::bitflags;
 pub(super) const BYTES_IN_USER_SEGMENT_DESCRIPTOR: usize = 8;
 pub(super) const BYTES_IN_SYSTEM_SEGMENT_DESCRIPTOR: usize = 16;
 
+// A struct describing a pointer to a descriptor table (GDT / IDT).
+/// This is in a format suitable for giving to 'lgdt' or 'lidt'.
 #[derive(Debug, Clone, Copy)]
 #[repr(C, packed)]
 pub struct DescriptorTablePointer {
@@ -64,6 +68,7 @@ impl Descriptor {
 }
 
 bitflags! {
+    /// Flags for a GDT descriptor. Not all flags are valid for all descriptor types.
     pub struct DescriptorFlags: u64 {
         /// Set by the processor if this segment has been accessed. Only cleared by software.
         /// _Setting_ this bit in software prevents GDT writes on first use.

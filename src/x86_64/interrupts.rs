@@ -1,3 +1,5 @@
+//! Utility operations for handling interrupts in general
+
 use core::arch::asm;
 
 use super::rflags::RFlags;
@@ -24,6 +26,12 @@ fn are_enabled() -> bool {
     RFlags::read().contains(RFlags::INTERRUPT_FLAG)
 }
 
+/// Run a closure with disabled interrupts.
+///
+/// Run the given closure, disabling interrupts before running it (if they aren't already disabled).
+/// Afterwards, interrupts are enabling again if they were enabled before.
+///
+/// Nesting can result in undefined behavior.
 pub fn execute_without_interrupts<F, R>(f: F) -> R
 where
     F: FnOnce() -> R,
@@ -43,6 +51,7 @@ where
     ret
 }
 
+/// Cause a breakpoint exception by invoking the `int3` instruction.
 pub fn invoke_breakpoint_exception() {
     // Cause a breakpoint exception by invoking the `int3` instruction.
     // https://en.wikipedia.org/wiki/INT_%28x86_instruction%29

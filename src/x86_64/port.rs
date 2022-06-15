@@ -1,5 +1,9 @@
+//! I/O Port operations
+
 use core::{arch::asm, marker::PhantomData};
 
+/// Helper trait to read
+///
 /// On x86, I/O ports operate on
 /// - `u8` (via `inb`/`outb`)
 /// - `u16` (via `inw`/`outw`),
@@ -10,6 +14,8 @@ pub trait PortRead {
     unsafe fn read_from_port(port: u16) -> Self;
 }
 
+/// Helper trait to write
+///
 /// On x86, I/O ports operate on
 /// - `u8` (via `inb`/`outb`)
 /// - `u16` (via `inw`/`outw`),
@@ -40,6 +46,7 @@ impl PortWrite for u32 {
     }
 }
 
+/// I/O port
 pub struct Port<T> {
     port: u16,
     phantom: PhantomData<T>,
