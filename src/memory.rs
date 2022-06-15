@@ -60,5 +60,5 @@ pub fn translate_address(
     }
     let l1_frame: MappedFrame = entry.frame(PageTableLevel::Level1).ok()?;
 
-    Some(l1_frame.start_address() + u64::from(address.page_offset()))
+    Some(l1_frame.start_address() + u64::from(address.page_offset(PageTableLevel::Level1)))
 }

@@ -116,22 +116,40 @@ impl fmt::Debug for PageTableEntry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub struct PageOffset(u16);
+pub struct PageOffset<S>
+where
+    S: PageSize,
+{
+    offset: u32,
+    _phantom: PhantomData<S>,
+}
 
-impl PageOffset {
-    pub fn new_truncate(offset: u16) -> PageOffset {
-        PageOffset(offset % (1 << 12))
+impl<S> PageOffset<S>
+where
+    S: PageSize,
+{
+    pub fn new_truncate(offset: u32) -> Self {
+        PageOffset {
+            offset: (offset % (1 << 12)),
+            _phantom: PhantomData,
+        }
     }
 
     #[cfg(test)]
-    pub fn from_raw(index: u16) -> PageOffset {
-        PageOffset(index)
+    pub fn from_raw(index: u32) -> Self {
+        PageOffset {
+            offset: index,
+            _phantom: PhantomData,
+        }
     }
 }
 
-impl From<PageOffset> for u64 {
-    fn from(offset: PageOffset) -> Self {
-        u64::from(offset.0)
+impl<S> From<PageOffset<S>> for u64
+where
+    S: PageSize,
+{
+    fn from(offset: PageOffset<S>) -> Self {
+        u64::from(offset.offset)
     }
 }
 
@@ -151,6 +169,7 @@ impl PageTableIndex {
 
 pub trait PageSize {
     const SIZE: u64;
+    const BITS: usize;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -158,6 +177,7 @@ pub struct Size4KiB {}
 
 impl PageSize for Size4KiB {
     const SIZE: u64 = 4 * 1024;
+    const BITS: usize = 12;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -165,6 +185,7 @@ pub struct Size2MiB {}
 
 impl PageSize for Size2MiB {
     const SIZE: u64 = 2 * 1024 * 1024;
+    const BITS: usize = 21;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -172,6 +193,7 @@ pub struct Size1GiB {}
 
 impl PageSize for Size1GiB {
     const SIZE: u64 = 1024 * 1024 * 1024;
+    const BITS: usize = 30;
 }
 
 // Not implementing support for 1GiB pages
@@ -228,6 +250,23 @@ impl MappedFrame {
             MappedFrame::Normal(frame) => frame.start_address(),
             MappedFrame::Huge(frame) => frame.start_address(),
             MappedFrame::Giant(frame) => frame.start_address(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MappedPageOffset {
+    Normal(PageOffset<Size4KiB>),
+    Huge(PageOffset<Size2MiB>),
+    Giant(PageOffset<Size1GiB>),
+}
+
+impl From<MappedPageOffset> for u64 {
+    fn from(offset: MappedPageOffset) -> Self {
+        match offset {
+            MappedPageOffset::Normal(offset) => u64::from(offset),
+            MappedPageOffset::Huge(offset) => u64::from(offset),
+            MappedPageOffset::Giant(offset) => u64::from(offset),
         }
     }
 }

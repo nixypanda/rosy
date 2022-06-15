@@ -5,7 +5,7 @@ use core::{
 
 use bit_field::BitField;
 
-use super::paging::{PageOffset, PageTableIndex};
+use super::paging::{MappedPageOffset, PageOffset, PageTableIndex, PageTableLevel};
 
 /// A canonical 64-bit virtual memory address.
 ///
@@ -97,8 +97,21 @@ impl VirtualAddress {
         self.as_ptr::<T>() as *mut T
     }
 
-    pub fn page_offset(self) -> PageOffset {
-        PageOffset::new_truncate(self.0 as u16)
+    pub fn page_offset(self, level: PageTableLevel) -> MappedPageOffset {
+        match level {
+            PageTableLevel::Level1 => {
+                MappedPageOffset::Normal(PageOffset::new_truncate(self.0 as u32))
+            }
+            PageTableLevel::Level2 => {
+                MappedPageOffset::Huge(PageOffset::new_truncate(self.0 as u32))
+            }
+            PageTableLevel::Level3 => {
+                MappedPageOffset::Huge(PageOffset::new_truncate(self.0 as u32))
+            }
+            PageTableLevel::Level4 => {
+                panic!("VirtualAddress::page_offset: level 4 is not supported");
+            }
+        }
     }
 
     pub fn p1_index(self) -> PageTableIndex {
@@ -271,8 +284,8 @@ fn test_page_table_index_extraction_works() {
 fn test_page_table_offset_exstaction_works() {
     let address: u64 = 0o001_000_777_177_2716;
     assert_eq!(
-        VirtualAddress::new(address).page_offset(),
-        PageOffset::from_raw(0o2716)
+        VirtualAddress::new(address).page_offset(PageTableLevel::Level1),
+        MappedPageOffset::Normal(PageOffset::from_raw(0o2716))
     );
 }
 
