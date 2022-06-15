@@ -82,13 +82,17 @@ impl PageTableEntry {
         self.flags().contains(PageTableEntryFlags::HUGE_PAGE)
     }
 
-    pub fn frame(&self) -> Result<PageTableFrame<Size4KiB>, FrameError> {
+    pub fn frame(&self) -> Result<MappedFrame, FrameError> {
         if !self.flags().contains(PageTableEntryFlags::PRESENT) {
             Err(FrameError::FrameNotPresent)
         } else if self.flags().contains(PageTableEntryFlags::HUGE_PAGE) {
-            Err(FrameError::HugeFrame)
+            Ok(MappedFrame::Huge(PageTableFrame::containing_address(
+                self.address(),
+            )))
         } else {
-            Ok(PageTableFrame::containing_address(self.address()))
+            Ok(MappedFrame::Normal(PageTableFrame::containing_address(
+                self.address(),
+            )))
         }
     }
 }
@@ -159,7 +163,7 @@ impl PageSize for Size2MiB {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FrameError {
     FrameNotPresent,
-    HugeFrame,
+    // HugeFrame,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -192,6 +196,21 @@ where
         PageTableFrame {
             start_address: address,
             size: PhantomData,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MappedFrame {
+    Normal(PageTableFrame<Size4KiB>),
+    Huge(PageTableFrame<Size2MiB>),
+}
+
+impl MappedFrame {
+    pub fn start_address(&self) -> PhysicalAddress {
+        match self {
+            MappedFrame::Normal(frame) => frame.start_address(),
+            MappedFrame::Huge(frame) => frame.start_address(),
         }
     }
 }
