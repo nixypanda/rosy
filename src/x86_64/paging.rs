@@ -1,4 +1,4 @@
-use core::{fmt, ops::Index};
+use core::{fmt, marker::PhantomData, ops::Index};
 
 use bitflags::bitflags;
 
@@ -61,12 +61,6 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum FrameError {
-    FrameNotPresent,
-    HugeFrame,
-}
-
 impl PageTableEntry {
     pub fn new() -> PageTableEntry {
         PageTableEntry { entry: 0 }
@@ -84,7 +78,11 @@ impl PageTableEntry {
         self.entry == 0
     }
 
-    pub fn frame(&self) -> Result<PageTableFrame, FrameError> {
+    pub fn is_huge(&self) -> bool {
+        self.flags().contains(PageTableEntryFlags::HUGE_PAGE)
+    }
+
+    pub fn frame(&self) -> Result<PageTableFrame<Size4KiB>, FrameError> {
         if !self.flags().contains(PageTableEntryFlags::PRESENT) {
             Err(FrameError::FrameNotPresent)
         } else if self.flags().contains(PageTableEntryFlags::HUGE_PAGE) {
@@ -101,31 +99,6 @@ impl fmt::Debug for PageTableEntry {
         f.field("addr", &self.address());
         f.field("flags", &self.flags());
         f.finish()
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-#[repr(C)]
-pub struct PageTableFrame {
-    start_address: PhysicalAddress,
-}
-
-impl PageTableFrame {
-    pub fn containing_address(address: PhysicalAddress) -> Self {
-        PageTableFrame {
-            start_address: address.align_down(4096),
-        }
-    }
-
-    pub fn start_address(&self) -> PhysicalAddress {
-        self.start_address
-    }
-
-    #[cfg(test)]
-    pub fn from_raw(address: PhysicalAddress) -> Self {
-        PageTableFrame {
-            start_address: address,
-        }
     }
 }
 
@@ -160,5 +133,65 @@ impl PageTableIndex {
     #[cfg(test)]
     pub fn from_raw(index: u16) -> PageTableIndex {
         PageTableIndex(index)
+    }
+}
+
+pub trait PageSize {
+    const SIZE: u64;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Size4KiB {}
+
+impl PageSize for Size4KiB {
+    const SIZE: u64 = 4 * 1024;
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Size2MiB {}
+
+impl PageSize for Size2MiB {
+    const SIZE: u64 = 2 * 1024 * 1024;
+}
+
+// Not implementing support for 1GiB pages
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum FrameError {
+    FrameNotPresent,
+    HugeFrame,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(C)]
+pub struct PageTableFrame<S>
+where
+    S: PageSize,
+{
+    start_address: PhysicalAddress,
+    size: PhantomData<S>,
+}
+
+impl<S> PageTableFrame<S>
+where
+    S: PageSize,
+{
+    pub fn containing_address(address: PhysicalAddress) -> Self {
+        PageTableFrame {
+            start_address: address.align_down(S::SIZE),
+            size: PhantomData,
+        }
+    }
+
+    pub fn start_address(&self) -> PhysicalAddress {
+        self.start_address
+    }
+
+    #[cfg(test)]
+    pub fn from_raw(address: PhysicalAddress) -> Self {
+        PageTableFrame {
+            start_address: address,
+            size: PhantomData,
+        }
     }
 }

@@ -3,7 +3,7 @@ use core::arch::asm;
 
 use super::{
     address::{PhysicalAddress, VirtualAddress},
-    paging::PageTableFrame,
+    paging::{PageTableFrame, Size4KiB},
 };
 
 const CR3_PHYSICAL_ADDRESS_MASK: u64 = 0x000f_ffff_ffff_f000;
@@ -33,7 +33,7 @@ bitflags! {
     }
 }
 
-pub fn read_control_register_3() -> (PageTableFrame, Cr3Flags) {
+pub fn read_control_register_3() -> (PageTableFrame<Size4KiB>, Cr3Flags) {
     let mut cr3: u64;
     unsafe {
         asm!("mov {}, cr3", out(reg) cr3, options(nomem, nostack, preserves_flags));
@@ -41,7 +41,7 @@ pub fn read_control_register_3() -> (PageTableFrame, Cr3Flags) {
     u64_to_page_table_frame_and_cr3_flags(cr3)
 }
 
-fn u64_to_page_table_frame_and_cr3_flags(value: u64) -> (PageTableFrame, Cr3Flags) {
+fn u64_to_page_table_frame_and_cr3_flags(value: u64) -> (PageTableFrame<Size4KiB>, Cr3Flags) {
     let physical_address = PhysicalAddress::new(value & CR3_PHYSICAL_ADDRESS_MASK);
     let flags = Cr3Flags::from_bits_truncate(value & CR3_FLAGS_MASK);
     let page_table_frame = PageTableFrame::containing_address(physical_address);
