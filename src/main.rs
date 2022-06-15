@@ -7,10 +7,14 @@
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
-    memory::{active_level4_page_table, OffsetMemoryMapper},
+    memory::active_level4_page_table,
     print, println,
     utils::halt_loop,
-    x86_64::{address::VirtualAddress, instructions::read_control_register_3, paging::PageTable},
+    x86_64::{
+        address::VirtualAddress,
+        instructions::read_control_register_3,
+        paging::{OffsetMemoryMapper, PageTable},
+    },
 };
 
 entry_point!(kernel_main);
