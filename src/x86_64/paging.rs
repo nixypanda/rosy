@@ -252,6 +252,21 @@ impl MappedFrame {
             MappedFrame::Giant(frame) => frame.start_address(),
         }
     }
+
+    pub fn address_at_offset(&self, offset: MappedPageOffset) -> PhysicalAddress {
+        match self {
+            MappedFrame::Normal(frame) => frame.start_address() + u64::from(offset),
+            MappedFrame::Huge(frame) => frame.start_address() + u64::from(offset),
+            MappedFrame::Giant(frame) => frame.start_address() + u64::from(offset),
+        }
+    }
+
+    pub fn is_huge(&self) -> bool {
+        match self {
+            MappedFrame::Normal(_) => false,
+            _ => true,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

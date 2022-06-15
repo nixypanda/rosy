@@ -7,7 +7,7 @@
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
-    memory::{active_level4_page_table, translate_address},
+    memory::{active_level4_page_table, OffsetMemoryMapper},
     print, println,
     utils::halt_loop,
     x86_64::{address::VirtualAddress, instructions::read_control_register_3, paging::PageTable},
@@ -38,6 +38,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     }
 
     let phys_mem_offset = VirtualAddress::new(boot_info.physical_memory_offset);
+    let offset_memory_mapper = OffsetMemoryMapper::new(phys_mem_offset);
 
     let addresses = [
         // the identity-mapped vga buffer page
@@ -52,7 +53,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
 
     for &address in &addresses {
         let virt = VirtualAddress::new(address);
-        let phys = translate_address(virt, phys_mem_offset);
+        let phys = offset_memory_mapper.translate_address(virt);
         println!("{:?} -> {:?}", virt, phys);
     }
 
