@@ -7,7 +7,7 @@ use core::{
 
 use bit_field::BitField;
 
-use super::paging::{MappedPageOffset, PageOffset, PageTableIndex, PageTableLevel};
+use super::paging::{PageOffset, PageOffsetInner, PageTableIndex, PageTableLevel};
 
 /// A canonical 64-bit virtual memory address.
 ///
@@ -105,16 +105,16 @@ impl VirtualAddress {
     /// - [`PageTableLevel::Level2`]: The page offset is the lower 21 bits.
     /// - [`PageTableLevel::Level3`]: The page offset is the lower 30 bits.
     /// - Panics when is given [`PageTableLevel::Level4`]
-    pub fn page_offset(self, level: PageTableLevel) -> MappedPageOffset {
+    pub fn page_offset(self, level: PageTableLevel) -> PageOffset {
         match level {
             PageTableLevel::Level1 => {
-                MappedPageOffset::Normal(PageOffset::new_truncate(self.0 as u32))
+                PageOffset::Normal(PageOffsetInner::new_truncate(self.0 as u32))
             }
             PageTableLevel::Level2 => {
-                MappedPageOffset::Huge(PageOffset::new_truncate(self.0 as u32))
+                PageOffset::Huge(PageOffsetInner::new_truncate(self.0 as u32))
             }
             PageTableLevel::Level3 => {
-                MappedPageOffset::Huge(PageOffset::new_truncate(self.0 as u32))
+                PageOffset::Huge(PageOffsetInner::new_truncate(self.0 as u32))
             }
             PageTableLevel::Level4 => {
                 panic!("VirtualAddress::page_offset: level 4 is not supported");
@@ -219,8 +219,22 @@ impl PhysicalAddress {
 impl Add<u64> for PhysicalAddress {
     type Output = Self;
 
+    /// Ability to add a `u63` to a `PhysicalAddress`. This is mostly for convinience.
     fn add(self, rhs: u64) -> Self::Output {
         PhysicalAddress::new(self.0 + rhs as u64)
+    }
+}
+
+impl Add<PageOffset> for PhysicalAddress {
+    type Output = Self;
+
+    /// Add a page offset to a physical address to get a physical address at the provided offset
+    fn add(self, rhs: PageOffset) -> Self::Output {
+        match rhs {
+            PageOffset::Normal(offset) => self + u64::from(offset),
+            PageOffset::Giant(offset) => self + u64::from(offset),
+            PageOffset::Huge(offset) => self + u64::from(offset),
+        }
     }
 }
 
@@ -297,7 +311,7 @@ fn test_page_table_offset_exstaction_works() {
     let address: u64 = 0o001_000_777_177_2716;
     assert_eq!(
         VirtualAddress::new(address).page_offset(PageTableLevel::Level1),
-        MappedPageOffset::Normal(PageOffset::from_raw(0o2716))
+        PageOffset::Normal(PageOffsetInner::from_raw(0o2716))
     );
 }
 
