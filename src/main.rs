@@ -36,6 +36,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     print_level4_page_table_address();
     verify_level4_page_table_iteration(physical_memory_offset);
     translate_a_bunch_of_virtual_addresses(physical_memory_offset);
+    verify_page_mapping_works(physical_memory_offset);
 
     #[cfg(test)]
     test_main();
@@ -89,12 +90,20 @@ fn translate_a_bunch_of_virtual_addresses(physical_memory_offset: VirtualAddress
         let phys = offset_memory_mapper.translate_address(virt);
         println!("{:?} -> {:?}", virt, phys);
     }
+}
 
-    #[cfg(test)]
-    test_main();
+fn verify_page_mapping_works(physical_memory_offset: VirtualAddress) {
+    let offset_memory_mapper = unsafe { OffsetMemoryMapper::new(physical_memory_offset) };
 
-    println!("It did not crash!");
-    halt_loop();
+    let page = Page::Normal(PageInner::containing_address(VirtualAddress::new(0x00)));
+    let frame = PageFrame::Normal(PageFrameInner::containing_address(PhysicalAddress::new(
+        0xb8000,
+    )));
+    let flags = PageTableEntryFlags::PRESENT | PageTableEntryFlags::WRITABLE;
+    offset_memory_mapper.map_to(page, frame, flags).unwrap();
+
+    let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
+    unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
 }
 
 #[cfg(not(test))]
