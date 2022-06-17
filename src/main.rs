@@ -14,8 +14,8 @@ use rosy::{
         address::{PhysicalAddress, VirtualAddress},
         instructions::read_control_register_3,
         paging::{
-            OffsetMemoryMapper, Page, PageFrame, PageFrameInner, PageInner, PageTable,
-            PageTableEntryFlags,
+            FrameAllocator, OffsetMemoryMapper, Page, PageFrame, PageFrameInner, PageInner,
+            PageTable, PageTableEntryFlags,
         },
     },
 };
@@ -32,11 +32,18 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
         boot_info.physical_memory_offset
     );
     let physical_memory_offset = VirtualAddress::new(boot_info.physical_memory_offset);
+    let offset_memory_mapper: &mut OffsetMemoryMapper = unsafe {
+        &mut OffsetMemoryMapper::new(
+            physical_memory_offset,
+            FrameAllocator::new(&boot_info.memory_map),
+        )
+    };
 
     print_level4_page_table_address();
     verify_level4_page_table_iteration(physical_memory_offset);
-    translate_a_bunch_of_virtual_addresses(physical_memory_offset);
-    verify_page_mapping_works(physical_memory_offset);
+    translate_a_bunch_of_virtual_addresses(physical_memory_offset, &offset_memory_mapper);
+    verify_page_mapping_works(offset_memory_mapper);
+    map_page_which_requires_frame_allocation(offset_memory_mapper);
 
     #[cfg(test)]
     test_main();
@@ -71,9 +78,10 @@ fn print_level4_page_table_address() {
 ///
 /// Note: This is only to test the underlying implementation of mapping [`VirtualAddress`] to
 /// [`PhysicalAddress`] is wokring properly.
-fn translate_a_bunch_of_virtual_addresses(physical_memory_offset: VirtualAddress) {
-    let offset_memory_mapper = unsafe { OffsetMemoryMapper::new(physical_memory_offset) };
-
+fn translate_a_bunch_of_virtual_addresses(
+    physical_memory_offset: VirtualAddress,
+    offset_memory_mapper: &OffsetMemoryMapper,
+) {
     let addresses = [
         // the identity-mapped vga buffer page
         0xb8000,
@@ -92,9 +100,7 @@ fn translate_a_bunch_of_virtual_addresses(physical_memory_offset: VirtualAddress
     }
 }
 
-fn verify_page_mapping_works(physical_memory_offset: VirtualAddress) {
-    let offset_memory_mapper = unsafe { OffsetMemoryMapper::new(physical_memory_offset) };
-
+fn verify_page_mapping_works(offset_memory_mapper: &mut OffsetMemoryMapper) {
     let page = Page::Normal(PageInner::containing_address(VirtualAddress::new(0x00)));
     let frame = PageFrame::Normal(PageFrameInner::containing_address(PhysicalAddress::new(
         0xb8000,
@@ -104,6 +110,20 @@ fn verify_page_mapping_works(physical_memory_offset: VirtualAddress) {
 
     let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
     unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
+}
+
+fn map_page_which_requires_frame_allocation(offset_memory_mapper: &mut OffsetMemoryMapper) {
+    let page = Page::Normal(PageInner::containing_address(VirtualAddress::new(
+        0xdeadbeaf000,
+    )));
+    let frame = PageFrame::Normal(PageFrameInner::containing_address(PhysicalAddress::new(
+        0xb8000,
+    )));
+    let flags = PageTableEntryFlags::PRESENT | PageTableEntryFlags::WRITABLE;
+    offset_memory_mapper.map_to(page, frame, flags).unwrap();
+
+    let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
+    unsafe { page_ptr.offset(416).write_volatile(0x_f021_f077_f065_f04e) };
 }
 
 #[cfg(not(test))]

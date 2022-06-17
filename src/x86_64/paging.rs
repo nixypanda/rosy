@@ -8,6 +8,7 @@ use core::{
 };
 
 use bitflags::bitflags;
+use bootloader::bootinfo::{MemoryMap, MemoryRegionType};
 
 use super::{
     address::{PhysicalAddress, VirtualAddress},
@@ -26,6 +27,12 @@ pub struct PageTable {
 impl PageTable {
     pub fn iter(&self) -> impl Iterator<Item = &PageTableEntry> {
         self.entries.iter()
+    }
+
+    fn clear_all_entries(&mut self) {
+        for entry in self.entries.iter_mut() {
+            *entry = PageTableEntry::new();
+        }
     }
 }
 
@@ -147,7 +154,6 @@ impl PageTableEntry {
     }
 
     fn set_address(&mut self, address: PhysicalAddress, flags: PageTableEntryFlags) {
-        // assert!(address.is_aligned(Size4KiB::SIZE));
         self.entry = (address.as_u64()) | (self.flags().bits() | flags.bits());
     }
 
@@ -502,6 +508,7 @@ where
 pub struct OffsetMemoryMapper {
     physical_memory_offset: VirtualAddress,
     l4_table_address: PageFrame,
+    frame_allocator: FrameAllocator,
 }
 
 impl OffsetMemoryMapper {
@@ -518,11 +525,15 @@ impl OffsetMemoryMapper {
     ///
     /// This function is unsafe because the caller must guarantee that the passed `phys_offset`
     /// is correct.
-    pub unsafe fn new(physical_memory_offset: VirtualAddress) -> Self {
+    pub unsafe fn new(
+        physical_memory_offset: VirtualAddress,
+        frame_allocator: FrameAllocator,
+    ) -> Self {
         let (level4_table_physical_address, _) = read_control_register_3();
         OffsetMemoryMapper {
             physical_memory_offset,
             l4_table_address: level4_table_physical_address,
+            frame_allocator,
         }
     }
 
@@ -565,49 +576,83 @@ impl OffsetMemoryMapper {
     }
 
     pub fn map_to(
-        &self,
+        &mut self,
         page: Page,
         frame: PageFrame,
-        entry_flags: PageTableEntryFlags,
+        flags: PageTableEntryFlags,
     ) -> Result<(), MappingError> {
         let cr3_frame = self.l4_table_address;
 
         match (page, frame) {
-            // (Page::Giant(_), PageFrame::Giant(_)) => unimplemented!(),
-            // (Page::Huge(_), PageFrame::Huge(_)) => unimplemented!(),
             (Page::Normal(page), PageFrame::Normal(frame)) => {
-                let l4_table: &PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
-                let entry = &l4_table[page.p4_index()];
-                // println!("Level 4: {:?}", entry);
-                // FIXME: Handle case when this frame is missing
-                let l4_frame: PageFrame = entry.frame(PageTableLevel::Level4).unwrap();
+                let l4_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let l4_entry = &mut l4_table[page.p4_index()];
+
+                let l4_frame: PageFrame = l4_entry
+                    .frame(PageTableLevel::Level4)
+                    .or_else(|_| self.create_table_frame(l4_entry, flags))?;
 
                 let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
-                let entry = &l3_table[page.p3_index()];
-                // println!("Level 3: {:?}", entry);
-                let l3_frame: PageFrame = entry.frame(PageTableLevel::Level3).unwrap();
+                let l3_entry = &mut l3_table[page.p3_index()];
+
+                let l3_frame: PageFrame = l3_entry
+                    .frame(PageTableLevel::Level3)
+                    .or_else(|_| self.create_table_frame(l3_entry, flags))?;
 
                 let l2_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l3_frame)) };
-                let entry = &l2_table[page.p2_index()];
-                // println!("Level 2: {:?}", entry);
-                let l2_frame: PageFrame = entry.frame(PageTableLevel::Level2).unwrap();
+                let l2_entry = &mut l2_table[page.p2_index()];
+
+                let l2_frame: PageFrame = l2_entry
+                    .frame(PageTableLevel::Level2)
+                    .or_else(|_| self.create_table_frame(l2_entry, flags))?;
 
                 let l1_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l2_frame)) };
-                let entry = &l1_table[page.p1_index()];
-                // println!("Level 1: {:?}", entry);
+                let l1_entry = &mut l1_table[page.p1_index()];
 
-                if entry.is_used() {
+                if l1_entry.is_used() {
                     return Err(MappingError::PageTableEntryAlreadyUsed);
                 }
 
-                l1_table[page.p1_index()].set_address(frame.start_address(), entry_flags);
+                l1_entry.set_address(frame.start_address(), flags);
 
+                // Flush any previous mapping that this [`VirtualAddress`] might have had.
                 flush_address_from_tlb(page.start_address());
 
                 Ok(())
             }
+            // (Page::Huge(_), PageFrame::Huge(_)) => unimplemented!(),
+            // (Page::Giant(_), PageFrame::Giant(_)) => unimplemented!(),
             _ => Err(MappingError::InvalidPageFrameMapping),
         }
+    }
+
+    /// Create a new [`PageTable`] frame and map it to the given [`PageTableEntry`].
+    ///
+    /// Makes use of the [`FrameAllocator`] set in this class to allocate a new [`PageFrame`].
+    fn create_table_frame(
+        &mut self,
+        entry: &mut PageTableEntry,
+        flags: PageTableEntryFlags,
+    ) -> Result<PageFrame, MappingError> {
+        let frame = self
+            .frame_allocator
+            .allocate_normal_frame()
+            .ok_or_else(|| MappingError::FrameAllocationFailed)?;
+
+        let flags = flags
+            & (PageTableEntryFlags::PRESENT
+                | PageTableEntryFlags::WRITABLE
+                | PageTableEntryFlags::USER_ACCESSIBLE);
+
+        // At this point we have created a new [`PageTable`] which is represented by `frame`. We
+        // now need to make sure that this page table is in a usable state. This region of memory
+        // can have some residual data that we are not sure of, so we need to zero it out.
+        let table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(frame)) };
+        table.clear_all_entries();
+
+        entry.set_address(frame.start_address(), flags);
+
+        Ok(frame)
     }
 
     /// Convert a given [`PageFrame`] to a pointer to a [`PageTable`].
@@ -626,6 +671,7 @@ impl OffsetMemoryMapper {
 pub enum MappingError {
     InvalidPageFrameMapping,
     PageTableEntryAlreadyUsed,
+    FrameAllocationFailed,
 }
 
 /// Invalidate the TLB completely by reloading the CR3 register.
@@ -638,5 +684,45 @@ pub fn flush_all() {
 pub fn flush_address_from_tlb(address: VirtualAddress) {
     unsafe {
         asm!("invlpg [{}]", in(reg) address.as_u64(), options(nostack, preserves_flags));
+    }
+}
+
+pub struct FrameAllocator {
+    memory_map: &'static MemoryMap,
+    next: usize,
+}
+
+/// A FrameAllocator that returns usable frames from the bootloader's memory map.
+impl FrameAllocator {
+    /// Create a FrameAllocator from the passed memory map.
+    ///
+    /// This function is unsafe because the caller must guarantee that the passed
+    /// memory map is valid. The main requirement is that all frames that are marked
+    /// as `USABLE` in it are really unused.
+    pub unsafe fn new(memory_map: &'static MemoryMap) -> Self {
+        FrameAllocator {
+            memory_map,
+            next: 0,
+        }
+    }
+
+    /// Returns an iterator over the usable frames specified in the memory map.
+    fn usable_frames(&self) -> impl Iterator<Item = PageFrame> {
+        let regions = self.memory_map.iter();
+        let usable_regions = regions.filter(|r| r.region_type == MemoryRegionType::Usable);
+        let addr_ranges = usable_regions.map(|r| r.range.start_addr()..r.range.end_addr());
+        let frame_addresses = addr_ranges.flat_map(|r| r.step_by(Size4KiB::SIZE as usize));
+        frame_addresses.map(|addr| {
+            PageFrame::Normal(PageFrameInner::containing_address(PhysicalAddress::new(
+                addr,
+            )))
+        })
+    }
+
+    /// Retrun next available [`PageFrame`] of 4KiB size
+    fn allocate_normal_frame(&mut self) -> Option<PageFrame> {
+        let frame = self.usable_frames().nth(self.next);
+        self.next += 1;
+        frame
     }
 }
