@@ -1,12 +1,17 @@
 //! Paging for x86_64.
 
-use core::{fmt, marker::PhantomData, ops::Index};
+use core::{
+    arch::asm,
+    fmt,
+    marker::PhantomData,
+    ops::{Index, IndexMut},
+};
 
 use bitflags::bitflags;
 
 use super::{
     address::{PhysicalAddress, VirtualAddress},
-    instructions::read_control_register_3,
+    instructions::{read_control_register_3, write_control_register_3},
 };
 
 const ENTRY_COUNT: usize = 512;
@@ -29,6 +34,12 @@ impl Index<PageTableIndex> for PageTable {
 
     fn index(&self, index: PageTableIndex) -> &Self::Output {
         &self.entries[index.0 as usize]
+    }
+}
+
+impl IndexMut<PageTableIndex> for PageTable {
+    fn index_mut(&mut self, index: PageTableIndex) -> &mut Self::Output {
+        &mut self.entries[index.0 as usize]
     }
 }
 
@@ -134,6 +145,15 @@ impl PageTableEntry {
             )))
         }
     }
+
+    fn set_address(&mut self, address: PhysicalAddress, flags: PageTableEntryFlags) {
+        // assert!(address.is_aligned(Size4KiB::SIZE));
+        self.entry = (address.as_u64()) | (self.flags().bits() | flags.bits());
+    }
+
+    fn is_used(&self) -> bool {
+        !self.is_unused()
+    }
 }
 
 impl fmt::Debug for PageTableEntry {
@@ -195,6 +215,64 @@ impl PageSize for Size1GiB {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(C)]
+pub struct PageInner<S>
+where
+    S: PageSize,
+{
+    start_address: VirtualAddress,
+    _size: PhantomData<S>,
+}
+
+impl<S> PageInner<S>
+where
+    S: PageSize,
+{
+    pub fn containing_address(address: VirtualAddress) -> PageInner<S> {
+        PageInner {
+            start_address: address,
+            _size: PhantomData,
+        }
+    }
+    pub fn start_address(&self) -> VirtualAddress {
+        self.start_address
+    }
+
+    fn p4_index(&self) -> PageTableIndex {
+        self.start_address.p4_index()
+    }
+
+    fn p3_index(&self) -> PageTableIndex {
+        self.start_address.p3_index()
+    }
+
+    fn p2_index(&self) -> PageTableIndex {
+        self.start_address.p2_index()
+    }
+
+    fn p1_index(&self) -> PageTableIndex {
+        self.start_address.p1_index()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Page {
+    Normal(PageInner<Size4KiB>),
+    Huge(PageInner<Size2MiB>),
+    Giant(PageInner<Size1GiB>),
+}
+
+impl Page {
+    pub fn start_address(&self) -> VirtualAddress {
+        match self {
+            Page::Normal(inner) => inner.start_address(),
+            Page::Huge(inner) => inner.start_address(),
+            Page::Giant(inner) => inner.start_address(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FrameError {
     FrameNotPresent,
 }
@@ -222,7 +300,7 @@ where
     S: PageSize,
 {
     /// Returns the frame that contains the given address.
-    fn containing_address(address: PhysicalAddress) -> Self {
+    pub fn containing_address(address: PhysicalAddress) -> Self {
         PageFrameInner {
             start_address: address.align_down(S::SIZE),
             size: PhantomData,
@@ -486,6 +564,52 @@ impl OffsetMemoryMapper {
         Some(l1_frame.convert(address))
     }
 
+    pub fn map_to(
+        &self,
+        page: Page,
+        frame: PageFrame,
+        entry_flags: PageTableEntryFlags,
+    ) -> Result<(), MappingError> {
+        let cr3_frame = self.l4_table_address;
+
+        match (page, frame) {
+            // (Page::Giant(_), PageFrame::Giant(_)) => unimplemented!(),
+            // (Page::Huge(_), PageFrame::Huge(_)) => unimplemented!(),
+            (Page::Normal(page), PageFrame::Normal(frame)) => {
+                let l4_table: &PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let entry = &l4_table[page.p4_index()];
+                // println!("Level 4: {:?}", entry);
+                // FIXME: Handle case when this frame is missing
+                let l4_frame: PageFrame = entry.frame(PageTableLevel::Level4).unwrap();
+
+                let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
+                let entry = &l3_table[page.p3_index()];
+                // println!("Level 3: {:?}", entry);
+                let l3_frame: PageFrame = entry.frame(PageTableLevel::Level3).unwrap();
+
+                let l2_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l3_frame)) };
+                let entry = &l2_table[page.p2_index()];
+                // println!("Level 2: {:?}", entry);
+                let l2_frame: PageFrame = entry.frame(PageTableLevel::Level2).unwrap();
+
+                let l1_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l2_frame)) };
+                let entry = &l1_table[page.p1_index()];
+                // println!("Level 1: {:?}", entry);
+
+                if entry.is_used() {
+                    return Err(MappingError::PageTableEntryAlreadyUsed);
+                }
+
+                l1_table[page.p1_index()].set_address(frame.start_address(), entry_flags);
+
+                flush_address_from_tlb(page.start_address());
+
+                Ok(())
+            }
+            _ => Err(MappingError::InvalidPageFrameMapping),
+        }
+    }
+
     /// Convert a given [`PageFrame`] to a pointer to a [`PageTable`].
     ///
     /// # Safety
@@ -495,5 +619,24 @@ impl OffsetMemoryMapper {
     unsafe fn frame_to_pointer(&self, frame: PageFrame) -> *mut PageTable {
         let virtual_address = self.physical_memory_offset + frame.start_address().as_u64();
         virtual_address.as_mut_ptr()
+    }
+}
+
+#[derive(Debug)]
+pub enum MappingError {
+    InvalidPageFrameMapping,
+    PageTableEntryAlreadyUsed,
+}
+
+/// Invalidate the TLB completely by reloading the CR3 register.
+pub fn flush_all() {
+    let (frame, flags) = read_control_register_3();
+    unsafe { write_control_register_3(frame, flags) }
+}
+
+/// Flush the provided address from the TLB
+pub fn flush_address_from_tlb(address: VirtualAddress) {
+    unsafe {
+        asm!("invlpg [{}]", in(reg) address.as_u64(), options(nostack, preserves_flags));
     }
 }

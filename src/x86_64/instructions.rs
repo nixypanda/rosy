@@ -47,6 +47,13 @@ pub fn read_control_register_3() -> (PageFrame, Cr3Flags) {
     u64_to_page_table_frame_and_cr3_flags(cr3)
 }
 
+pub unsafe fn write_control_register_3(page_frame: PageFrame, flags: Cr3Flags) {
+    let addr = page_frame.start_address();
+    let value = addr.as_u64() | (flags.bits() as u16) as u64;
+
+    asm!("mov cr3, {}", in(reg) value, options(nostack, preserves_flags));
+}
+
 fn u64_to_page_table_frame_and_cr3_flags(value: u64) -> (PageFrame, Cr3Flags) {
     let physical_address = PhysicalAddress::new(value & CR3_PHYSICAL_ADDRESS_MASK);
     let flags = Cr3Flags::from_bits_truncate(value & CR3_FLAGS_MASK);
