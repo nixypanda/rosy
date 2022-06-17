@@ -4,7 +4,7 @@ use core::{
     arch::asm,
     fmt,
     marker::PhantomData,
-    ops::{Index, IndexMut},
+    ops::{Add, AddAssign, Index, IndexMut},
 };
 
 use bitflags::bitflags;
@@ -187,7 +187,7 @@ impl PageTableIndex {
 }
 
 /// Trait for abstracting over the three possible page sizes on x86_64, 4KiB, 2MiB, 1GiB.
-pub trait PageSize {
+pub trait PageSize: Copy + Eq + PartialOrd + Ord {
     const SIZE: u64;
     const BITS: usize;
 }
@@ -258,6 +258,10 @@ where
 
     fn p1_index(&self) -> PageTableIndex {
         self.start_address.p1_index()
+    }
+
+    pub fn range_inclusive(start: Self, end: Self) -> PageRangeInclusive<S> {
+        PageRangeInclusive { start, end }
     }
 }
 
@@ -508,7 +512,7 @@ where
 pub struct OffsetMemoryMapper {
     physical_memory_offset: VirtualAddress,
     l4_table_address: PageFrame,
-    frame_allocator: FrameAllocator,
+    pub frame_allocator: FrameAllocator,
 }
 
 impl OffsetMemoryMapper {
@@ -776,9 +780,55 @@ impl FrameAllocator {
     }
 
     /// Retrun next available [`PageFrame`] of 4KiB size
-    fn allocate_normal_frame(&mut self) -> Option<PageFrame> {
+    pub fn allocate_normal_frame(&mut self) -> Option<PageFrame> {
         let frame = self.usable_frames().nth(self.next);
         self.next += 1;
         frame
+    }
+}
+
+/// A range of pages with inclusive upper bound.
+#[derive(Clone, Copy, PartialEq, Eq)]
+#[repr(C)]
+pub struct PageRangeInclusive<S: PageSize = Size4KiB> {
+    /// The start of the range, inclusive.
+    pub start: PageInner<S>,
+    /// The end of the range, inclusive.
+    pub end: PageInner<S>,
+}
+
+impl<S: PageSize> PageRangeInclusive<S> {
+    /// Returns wether this range contains no pages.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.start > self.end
+    }
+}
+
+impl<S: PageSize> Iterator for PageRangeInclusive<S> {
+    type Item = PageInner<S>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start <= self.end {
+            let page = self.start;
+            self.start += 1;
+            Some(page)
+        } else {
+            None
+        }
+    }
+}
+
+impl<S: PageSize> Add<u64> for PageInner<S> {
+    type Output = Self;
+
+    fn add(self, rhs: u64) -> Self::Output {
+        PageInner::containing_address(self.start_address() + rhs * S::SIZE)
+    }
+}
+
+impl<S: PageSize> AddAssign<u64> for PageInner<S> {
+    fn add_assign(&mut self, rhs: u64) {
+        *self = *self + rhs;
     }
 }

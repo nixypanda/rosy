@@ -4,9 +4,13 @@
 #![test_runner(rosy::test_runner)]
 #![reexport_test_harness_main = "test_main"]
 
+extern crate alloc;
+
+use alloc::boxed::Box;
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
+    allocator,
     memory::active_level4_page_table,
     print, println,
     utils::halt_loop,
@@ -44,6 +48,10 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     translate_a_bunch_of_virtual_addresses(physical_memory_offset, &offset_memory_mapper);
     verify_page_mapping_works(offset_memory_mapper);
     map_page_which_requires_frame_allocation(offset_memory_mapper);
+
+    allocator::init_heap(offset_memory_mapper).expect("heap initialization failed");
+
+    let _x = Box::new(42);
 
     #[cfg(test)]
     test_main();
