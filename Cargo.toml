@@ -9,6 +9,10 @@ edition = "2021"
 name = "stack_overflow"
 harness = false
 
+[[test]]
+name = "should_panic"
+harness = false
+
 [dependencies]
 bootloader = { version = "0.9.8", features = ["map_physical_memory"] }
 volatile = { version = "0.2.6"}
