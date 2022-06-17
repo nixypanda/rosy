@@ -11,28 +11,40 @@ use rosy::{
     print, println,
     utils::halt_loop,
     x86_64::{
-        address::VirtualAddress,
+        address::{PhysicalAddress, VirtualAddress},
         instructions::read_control_register_3,
-        paging::{OffsetMemoryMapper, PageTable},
+        paging::{
+            OffsetMemoryMapper, Page, PageFrame, PageFrameInner, PageInner, PageTable,
+            PageTableEntryFlags,
+        },
     },
 };
 
 entry_point!(kernel_main);
 
 pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
-    println!("Hello World!");
-
     rosy::init();
 
-    let (base_page_table_address, _) = read_control_register_3();
+    println!("Hello World!");
+
     println!(
-        "Base Address of the Page Table: {:?}",
-        base_page_table_address
+        "Physical Memory Offset: {:?}",
+        boot_info.physical_memory_offset
     );
-
-    println!("{:?}", boot_info.physical_memory_offset);
-
     let physical_memory_offset = VirtualAddress::new(boot_info.physical_memory_offset);
+
+    print_level4_page_table_address();
+    verify_level4_page_table_iteration(physical_memory_offset);
+    translate_a_bunch_of_virtual_addresses(physical_memory_offset);
+
+    #[cfg(test)]
+    test_main();
+
+    println!("It did not crash!");
+    halt_loop();
+}
+
+fn verify_level4_page_table_iteration(physical_memory_offset: VirtualAddress) {
     let l4_page_table: &PageTable = unsafe { active_level4_page_table(physical_memory_offset) };
 
     for (index, entry) in l4_page_table.iter().enumerate() {
@@ -40,9 +52,26 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
             println!("L4 entry {}: {:?}", index, entry);
         }
     }
+}
 
-    let phys_mem_offset = VirtualAddress::new(boot_info.physical_memory_offset);
-    let offset_memory_mapper = unsafe { OffsetMemoryMapper::new(phys_mem_offset) };
+/// Reads the CR3 register and prints the virtual address of the Level 4 [`PageTable`]
+///
+/// Note: This is only for testing that the underlying reading from the CR3 register is happening
+/// properly
+fn print_level4_page_table_address() {
+    let (base_page_table_address, _) = read_control_register_3();
+    println!(
+        "Base Address of the Page Table: {:?}",
+        base_page_table_address
+    );
+}
+
+/// Translaets a few virtual addresses to physical addresses using the [`OffsetMemoryMapper`].
+///
+/// Note: This is only to test the underlying implementation of mapping [`VirtualAddress`] to
+/// [`PhysicalAddress`] is wokring properly.
+fn translate_a_bunch_of_virtual_addresses(physical_memory_offset: VirtualAddress) {
+    let offset_memory_mapper = unsafe { OffsetMemoryMapper::new(physical_memory_offset) };
 
     let addresses = [
         // the identity-mapped vga buffer page
@@ -52,7 +81,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
         // some stack page
         0x0100_0020_1958,
         // virtual address mapped to physical address 0
-        boot_info.physical_memory_offset,
+        physical_memory_offset.as_u64(),
     ];
 
     for &address in &addresses {
