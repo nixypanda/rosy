@@ -620,8 +620,64 @@ impl OffsetMemoryMapper {
 
                 Ok(())
             }
-            // (Page::Huge(_), PageFrame::Huge(_)) => unimplemented!(),
-            // (Page::Giant(_), PageFrame::Giant(_)) => unimplemented!(),
+            (Page::Huge(page), PageFrame::Huge(frame)) => {
+                let l4_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let l4_entry = &mut l4_table[page.p4_index()];
+
+                let l4_frame: PageFrame = l4_entry
+                    .frame(PageTableLevel::Level4)
+                    .or_else(|_| self.create_table_frame(l4_entry, flags))?;
+
+                let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
+                let l3_entry = &mut l3_table[page.p3_index()];
+
+                let l3_frame: PageFrame = l3_entry
+                    .frame(PageTableLevel::Level3)
+                    .or_else(|_| self.create_table_frame(l3_entry, flags))?;
+
+                let l2_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l3_frame)) };
+                let l2_entry = &mut l2_table[page.p1_index()];
+
+                if l2_entry.is_used() {
+                    return Err(MappingError::PageTableEntryAlreadyUsed);
+                }
+
+                l2_entry.set_address(
+                    frame.start_address(),
+                    flags | PageTableEntryFlags::HUGE_PAGE,
+                );
+
+                // Flush any previous mapping that this [`VirtualAddress`] might have had.
+                flush_address_from_tlb(page.start_address());
+
+                Ok(())
+            }
+            (Page::Giant(page), PageFrame::Giant(frame)) => {
+                let l4_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let l4_entry = &mut l4_table[page.p4_index()];
+
+                let l4_frame: PageFrame = l4_entry
+                    .frame(PageTableLevel::Level4)
+                    .or_else(|_| self.create_table_frame(l4_entry, flags))?;
+
+                let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
+                let l3_entry = &mut l3_table[page.p1_index()];
+
+                if l3_entry.is_used() {
+                    return Err(MappingError::PageTableEntryAlreadyUsed);
+                }
+
+                l3_entry.set_address(
+                    frame.start_address(),
+                    flags | PageTableEntryFlags::HUGE_PAGE,
+                );
+
+                // Flush any previous mapping that this [`VirtualAddress`] might have had.
+                flush_address_from_tlb(page.start_address());
+
+                Ok(())
+            }
+            // Other combinations are not invaild
             _ => Err(MappingError::InvalidPageFrameMapping),
         }
     }
