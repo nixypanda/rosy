@@ -1,7 +1,6 @@
-use core::{
-    alloc::{GlobalAlloc, Layout},
-    ptr,
-};
+use core::alloc::Layout;
+
+use linked_list_allocator::LockedHeap;
 
 use crate::x86_64::{
     address::VirtualAddress,
@@ -11,20 +10,8 @@ use crate::x86_64::{
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
 
-pub struct NullAllocator;
-
-unsafe impl GlobalAlloc for NullAllocator {
-    unsafe fn alloc(&self, _layout: Layout) -> *mut u8 {
-        ptr::null_mut()
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        panic!("dealloc should never be called for NullAllocator");
-    }
-}
-
 #[global_allocator]
-pub static NO_USE_ALLOCATOR: NullAllocator = NullAllocator;
+static ALLOCATOR: LockedHeap = LockedHeap::empty();
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: Layout) -> ! {
@@ -49,6 +36,8 @@ pub fn init_heap(mapper: &mut OffsetMemoryMapper) -> Result<(), MappingError> {
         let flags = PageTableEntryFlags::PRESENT | PageTableEntryFlags::WRITABLE;
         unsafe { mapper.map_to(page, frame, flags)? };
     }
+
+    unsafe { ALLOCATOR.lock().init(HEAP_START, HEAP_SIZE) };
 
     Ok(())
 }
