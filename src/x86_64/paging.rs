@@ -579,7 +579,36 @@ impl OffsetMemoryMapper {
         Some(l1_frame.convert(address))
     }
 
-    pub fn map_to(
+    /// Create a new mapping in the [`PageTable`]
+    ///
+    /// This function will create new [`PageFrame`]s if necessary.
+    ///
+    /// # Safety
+    /// Creating page table mappings is a fundamentally unsafe operation because there are various
+    /// ways to break memory safety through it. For example, re-mapping an in-use page to a
+    /// different frame changes and invalidates all values stored in that page, resulting in
+    /// undefined behavior on the next use.
+    ///
+    /// The caller must ensure that no undefined behavior or memory safety violations can occur
+    /// through the new mapping. Among other things, the caller must prevent the following:
+    ///
+    /// * Aliasing of &mut references, i.e. two &mut references that point to the same physical
+    /// address. This is undefined behavior in Rust.
+    ///     * This can be ensured by mapping each page to an individual physical frame that is not
+    ///     mapped anywhere else.
+    ///
+    /// * Creating uninitalized or invalid values: Rust requires that all values have a correct
+    /// memory layout. For example, a bool must be either a 0 or a 1 in memory, but not a 3 or 4.
+    /// An exception is the MaybeUninit wrapper type, which abstracts over possibly uninitialized
+    /// memory.
+    ///     * This is only a problem when re-mapping pages to different physical frames. Mapping a
+    ///     page that is not in use yet is fine.
+    ///
+    /// Special care must be taken when sharing pages with other address spaces, e.g. by setting
+    /// the GLOBAL flag. For example, a global mapping must be the same in all address spaces,
+    /// otherwise undefined behavior can occur because of TLB races. It’s worth noting that all the
+    /// above requirements also apply to shared mappings, including the aliasing requirements.
+    pub unsafe fn map_to(
         &mut self,
         page: Page,
         frame: PageFrame,
@@ -589,28 +618,28 @@ impl OffsetMemoryMapper {
 
         match (page, frame) {
             (Page::Normal(page), PageFrame::Normal(frame)) => {
-                let l4_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let l4_table: &mut PageTable = &mut *(self.frame_to_pointer(cr3_frame));
                 let l4_entry = &mut l4_table[page.p4_index()];
 
                 let l4_frame: PageFrame = l4_entry
                     .frame(PageTableLevel::Level4)
                     .or_else(|_| self.create_table_frame(l4_entry, flags))?;
 
-                let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
+                let l3_table: &mut PageTable = &mut *(self.frame_to_pointer(l4_frame));
                 let l3_entry = &mut l3_table[page.p3_index()];
 
                 let l3_frame: PageFrame = l3_entry
                     .frame(PageTableLevel::Level3)
                     .or_else(|_| self.create_table_frame(l3_entry, flags))?;
 
-                let l2_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l3_frame)) };
+                let l2_table: &mut PageTable = &mut *(self.frame_to_pointer(l3_frame));
                 let l2_entry = &mut l2_table[page.p2_index()];
 
                 let l2_frame: PageFrame = l2_entry
                     .frame(PageTableLevel::Level2)
                     .or_else(|_| self.create_table_frame(l2_entry, flags))?;
 
-                let l1_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l2_frame)) };
+                let l1_table: &mut PageTable = &mut *(self.frame_to_pointer(l2_frame));
                 let l1_entry = &mut l1_table[page.p1_index()];
 
                 if l1_entry.is_used() {
@@ -625,21 +654,21 @@ impl OffsetMemoryMapper {
                 Ok(())
             }
             (Page::Huge(page), PageFrame::Huge(frame)) => {
-                let l4_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let l4_table: &mut PageTable = &mut *(self.frame_to_pointer(cr3_frame));
                 let l4_entry = &mut l4_table[page.p4_index()];
 
                 let l4_frame: PageFrame = l4_entry
                     .frame(PageTableLevel::Level4)
                     .or_else(|_| self.create_table_frame(l4_entry, flags))?;
 
-                let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
+                let l3_table: &mut PageTable = &mut *(self.frame_to_pointer(l4_frame));
                 let l3_entry = &mut l3_table[page.p3_index()];
 
                 let l3_frame: PageFrame = l3_entry
                     .frame(PageTableLevel::Level3)
                     .or_else(|_| self.create_table_frame(l3_entry, flags))?;
 
-                let l2_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l3_frame)) };
+                let l2_table: &mut PageTable = &mut *(self.frame_to_pointer(l3_frame));
                 let l2_entry = &mut l2_table[page.p1_index()];
 
                 if l2_entry.is_used() {
@@ -657,14 +686,14 @@ impl OffsetMemoryMapper {
                 Ok(())
             }
             (Page::Giant(page), PageFrame::Giant(frame)) => {
-                let l4_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(cr3_frame)) };
+                let l4_table: &mut PageTable = &mut *(self.frame_to_pointer(cr3_frame));
                 let l4_entry = &mut l4_table[page.p4_index()];
 
                 let l4_frame: PageFrame = l4_entry
                     .frame(PageTableLevel::Level4)
                     .or_else(|_| self.create_table_frame(l4_entry, flags))?;
 
-                let l3_table: &mut PageTable = unsafe { &mut *(self.frame_to_pointer(l4_frame)) };
+                let l3_table: &mut PageTable = &mut *(self.frame_to_pointer(l4_frame));
                 let l3_entry = &mut l3_table[page.p1_index()];
 
                 if l3_entry.is_used() {

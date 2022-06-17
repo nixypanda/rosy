@@ -114,7 +114,7 @@ fn verify_page_mapping_works(offset_memory_mapper: &mut OffsetMemoryMapper) {
         0xb8000,
     )));
     let flags = PageTableEntryFlags::PRESENT | PageTableEntryFlags::WRITABLE;
-    offset_memory_mapper.map_to(page, frame, flags).unwrap();
+    unsafe { offset_memory_mapper.map_to(page, frame, flags).unwrap() };
 
     let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
     unsafe { page_ptr.offset(400).write_volatile(0x_f021_f077_f065_f04e) };
@@ -128,7 +128,7 @@ fn map_page_which_requires_frame_allocation(offset_memory_mapper: &mut OffsetMem
         0xb8000,
     )));
     let flags = PageTableEntryFlags::PRESENT | PageTableEntryFlags::WRITABLE;
-    offset_memory_mapper.map_to(page, frame, flags).unwrap();
+    unsafe { offset_memory_mapper.map_to(page, frame, flags).unwrap() };
 
     let page_ptr: *mut u64 = page.start_address().as_mut_ptr();
     unsafe { page_ptr.offset(416).write_volatile(0x_f021_f077_f065_f04e) };
