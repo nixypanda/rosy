@@ -25,9 +25,10 @@ pub mod interrupt;
 pub mod keyboard;
 pub mod memory;
 pub mod pic8258;
+pub mod screen_printing;
 pub mod serial;
 pub mod utils;
-pub mod vga_buffer;
+pub mod vga;
 pub mod x86_64;
 
 use core::ops::Fn;

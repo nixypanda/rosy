@@ -1,18 +1,15 @@
 //! The VGA text mode is a simple way to print text to the screen.
 
-use core::fmt::{self, Write};
+use core::fmt::Write;
 
 use lazy_static::lazy_static;
-use spin::Mutex;
 use volatile::Volatile;
-
-use crate::x86_64::interrupts::execute_without_interrupts;
 
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 const NEWLINE_BYTE: u8 = b'\n';
 const ASCII_FALLBACK: u8 = 0xfe;
-const VGA_SEGMENT_START: usize = 0xb8000;
+pub const VGA_SEGMENT_START: usize = 0xb8000;
 lazy_static! {
     /// The default color used for printing. It is White
     pub static ref DEFAULT_COLOR_CODE: ColorCode = ColorCode::new(Color::White, Color::Black);
@@ -49,7 +46,7 @@ enum Color {
 /// Repesents the background and foregroud color That a character should be printed with.
 ///
 /// The following table represents the color codes:
-/// ```
+/// ```text
 /// | Number | 	Color     |	Number + Bright Bit	| Bright Color |
 /// | 0x0	 | Black      |	0x8	                | Dark Gray    |
 /// | 0x1	 | Blue	      | 0x9	                | Light Blue   |
@@ -59,6 +56,7 @@ enum Color {
 /// | 0x5	 | Magenta    |	0xd	                | Pink         |
 /// | 0x6	 | Brown      |	0xe	                | Yellow       |
 /// | 0x7	 | Light Gray | 0xf	                | White        |
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ColorCode(u8);
@@ -72,7 +70,7 @@ impl ColorCode {
 /// Ascii character with a color code.
 ///
 /// The bit structure of the character is:
-/// ```
+/// ```text
 /// | Bit(s) |	Value            |
 /// |   0-7  | 	ASCII code point |
 /// |  8-11  |	Foreground color | Handled by the [`ColorCode`] struct
@@ -81,14 +79,14 @@ impl ColorCode {
 /// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]
-struct ScreenChar {
+pub struct ScreenChar {
     ascii_code_point: u8,
     color_code: ColorCode,
 }
 
 impl ScreenChar {
     #[cfg(test)]
-    fn with_default_coloring(character: char) -> ScreenChar {
+    pub fn with_default_coloring(character: char) -> ScreenChar {
         ScreenChar {
             ascii_code_point: character as u8,
             color_code: *DEFAULT_COLOR_CODE,
@@ -99,7 +97,7 @@ impl ScreenChar {
 /// Representation of the VGA buffer. It is essentially a matrix of [`ScreenChar`]s. This matrix is
 /// represented as is on the screen.
 #[repr(transparent)]
-struct Buffer {
+pub struct Buffer {
     // The compiler doesn’t know that we really access VGA buffer memory (instead of normal RAM)
     // and knows nothing about the side effect that some characters appear on the screen. So it
     // might decide that these writes are unnecessary and can be omitted. To avoid this erroneous
@@ -127,8 +125,18 @@ pub struct Writer {
     buffer: &'static mut Buffer,
 }
 
+impl Default for Writer {
+    fn default() -> Self {
+        Writer {
+            col_position: 0,
+            color_code: *DEFAULT_COLOR_CODE,
+            buffer: unsafe { &mut *(VGA_SEGMENT_START as *mut Buffer) },
+        }
+    }
+}
+
 impl Writer {
-    fn with_color_code(&mut self, color_code: ColorCode) -> &mut Self {
+    pub fn with_color_code(&mut self, color_code: ColorCode) -> &mut Self {
         self.color_code = color_code;
         self
     }
@@ -141,7 +149,7 @@ impl Writer {
     }
 
     #[cfg(test)]
-    fn char_at(&self, row: usize, col: usize) -> ScreenChar {
+    pub fn char_at(&self, row: usize, col: usize) -> ScreenChar {
         self.buffer.chars[row][col].read()
     }
 
@@ -201,93 +209,4 @@ impl Write for Writer {
         self.write_string(s);
         Ok(())
     }
-}
-
-lazy_static! {
-    /// Global instance of [`Writer`].
-    ///
-    pub static ref WRITER: Mutex<Writer> = Mutex::new(Writer {
-        col_position: 0,
-        color_code: *DEFAULT_COLOR_CODE,
-        buffer: unsafe { &mut *(VGA_SEGMENT_START as *mut Buffer) },
-    });
-}
-
-/// Use [`static@WRITER`] to write to the VGA buffer using [`static@DEFAULT_COLOR_CODE`] with newline
-#[macro_export]
-macro_rules! println {
-    () => (print!("\n"));
-    ($($arg:tt)*) => (print!("{}\n", format_args!($($arg)*)));
-}
-
-/// Use [`static@WRITER`] to write to the VGA buffer using [`static@DEFAULT_COLOR_CODE`] without newline
-#[macro_export]
-macro_rules! print {
-    ($($arg:tt)*) => (
-        $crate::vga_buffer::_print(
-            *$crate::vga_buffer::DEFAULT_COLOR_CODE,
-            format_args!($($arg)*)
-        )
-    );
-}
-
-/// Use [`static@WRITER`] to write to the VGA buffer using [`static@ERROR_COLOR_CODE`] with newline
-#[macro_export]
-macro_rules! errorln {
-    () => (error!("\n"));
-    ($($arg:tt)*) => (error!("{}\n", format_args!($($arg)*)));
-}
-
-/// Use [`static@WRITER`] to write to the VGA buffer using [`static@ERROR_COLOR_CODE`] without newline
-#[macro_export]
-macro_rules! error {
-    ($($arg:tt)*) => (
-        $crate::vga_buffer::_print(
-            *$crate::vga_buffer::ERROR_COLOR_CODE,
-            format_args!($($arg)*)
-        )
-    );
-}
-
-#[doc(hidden)]
-pub fn _print(color_code: ColorCode, args: fmt::Arguments) {
-    // Execute without interrupts disables interrupts while executing a piece of code. We use it to
-    // ensure that no interrupt cannot occur as long as the Mutex is locked.
-    // Hardware interrupts can occur asynchronously while the Mutex is locked. In that situation
-    // WRITER is locked the interrupt handler waits on the Mutex to be unlocked. But this never
-    // happens as the `_start` is waiting on the interrupt handler to finish.
-    execute_without_interrupts(|| {
-        WRITER
-            .lock()
-            .with_color_code(color_code)
-            .write_fmt(args)
-            .unwrap();
-    });
-}
-
-#[test_case]
-fn test_println_macro_prints_one_line_without_panicking() {
-    println!("This is onen line");
-}
-
-#[test_case]
-fn test_println_macro_does_not_panic_when_we_go_beyond_vga_height() {
-    for _ in 0..100 {
-        println!("This should not panic!");
-    }
-}
-
-#[test_case]
-fn test_println_output_is_on_penultimate_line_and_uses_default_coloring() {
-    let string_to_print = "Something that is less than 80 chars";
-    execute_without_interrupts(|| {
-        let mut writer = WRITER.lock();
-        writeln!(writer, "\n{}", string_to_print).expect("writeln failed");
-        let height = writer.buffer_height();
-
-        for (i, c) in string_to_print.chars().enumerate() {
-            let screen_char = writer.char_at(height - 2, i);
-            assert_eq!(screen_char, ScreenChar::with_default_coloring(c));
-        }
-    })
 }
