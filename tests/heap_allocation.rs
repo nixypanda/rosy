@@ -9,12 +9,12 @@ extern crate alloc;
 use alloc::{boxed::Box, vec::Vec};
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use rosy::allocator::HEAP_SIZE;
+use rosy::allocation::HEAP_SIZE;
 
 entry_point!(main);
 
 fn main(boot_info: &'static BootInfo) -> ! {
-    use rosy::allocator;
+    use rosy::allocation;
     use rosy::x86_64::{
         address::VirtualAddress,
         paging::{FrameAllocator, OffsetMemoryMapper},
@@ -24,7 +24,7 @@ fn main(boot_info: &'static BootInfo) -> ! {
     let physical_memory_offset = VirtualAddress::new(boot_info.physical_memory_offset);
     let frame_allocator = unsafe { FrameAllocator::new(&boot_info.memory_map) };
     let mut mapper = unsafe { OffsetMemoryMapper::new(physical_memory_offset, frame_allocator) };
-    allocator::init_heap(&mut mapper).expect("heap initialization failed");
+    allocation::init_heap(&mut mapper).expect("heap initialization failed");
 
     test_main();
     loop {}

@@ -10,7 +10,7 @@ use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
-    allocator,
+    allocation,
     memory::active_level4_page_table,
     print, println,
     utils::halt_loop,
@@ -42,7 +42,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
             FrameAllocator::new(&boot_info.memory_map),
         )
     };
-    allocator::init_heap(offset_memory_mapper).expect("heap initialization failed");
+    allocation::init_heap(offset_memory_mapper).expect("heap initialization failed");
 
     print_level4_page_table_address();
     verify_level4_page_table_iteration(physical_memory_offset);
