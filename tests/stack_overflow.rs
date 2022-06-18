@@ -5,13 +5,14 @@
 use core::panic::PanicInfo;
 use lazy_static::lazy_static;
 use rosy::{
-    exit_qemu, serial_print, serial_println,
+    exit_qemu, serial_print, serial_println, serial_success,
     x86_64::idt::{ExceptionStackFrame, InterruptDescriptorTable},
     QemuExitCode,
 };
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    serial_println!();
     serial_print!("stack_overflow::stack_overflow...\t");
 
     rosy::gdt::init();
@@ -49,7 +50,9 @@ extern "x86-interrupt" fn test_double_fault_handler(
     _stack_frame: ExceptionStackFrame,
     _error_code: u64,
 ) -> ! {
-    serial_println!("[ok]");
+    serial_success!("[ok]");
+    serial_println!();
+    serial_println!();
     exit_qemu(QemuExitCode::Success);
     loop {}
 }

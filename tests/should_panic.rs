@@ -6,6 +6,8 @@ use rosy::{exit_qemu, serial_error, serial_print, serial_println, serial_success
 
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
+    serial_println!();
+    serial_println!("Running 1 test");
     should_fail();
     serial_error!("[test did not panic]");
     serial_println!();
@@ -21,6 +23,7 @@ fn should_fail() {
 #[panic_handler]
 fn panic(_info: &PanicInfo) -> ! {
     serial_success!("[ok]");
+    serial_println!();
     serial_println!();
     exit_qemu(QemuExitCode::Success);
     loop {}
