@@ -1,17 +1,22 @@
 use core::alloc::Layout;
 
-use linked_list_allocator::LockedHeap;
-
-use crate::x86_64::{
-    address::VirtualAddress,
-    paging::{MappingError, OffsetMemoryMapper, Page, PageInner, PageTableEntryFlags},
+use crate::{
+    utils::Locked,
+    x86_64::{
+        address::VirtualAddress,
+        paging::{MappingError, OffsetMemoryMapper, Page, PageInner, PageTableEntryFlags},
+    },
 };
+
+use self::bump::BumpAllocator;
+
+pub mod bump;
 
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB
 
 #[global_allocator]
-static ALLOCATOR: LockedHeap = LockedHeap::empty();
+static ALLOCATOR: Locked<BumpAllocator> = Locked::new(BumpAllocator::new());
 
 #[alloc_error_handler]
 fn alloc_error_handler(layout: Layout) -> ! {
