@@ -1,3 +1,4 @@
+//! Initialize the Interrupt Descriptor Table bi setting various interrupt handlers.
 use lazy_static::lazy_static;
 
 use crate::{
@@ -13,16 +14,31 @@ use crate::{
     },
 };
 
+/// Offset of the primary PIC in the PIC chain.
 pub const PIC_1_OFFSET: u8 = 32;
+/// Offset of the secondary PIC in the PIC chain.
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 const PS_2_CONTROLLER_PORT: u16 = 0x60;
 
+/// Loads the IDT into the CPU.
 pub fn init() {
     INTERRUPT_DESCRIPTOR_TABLE.load();
 }
 
 lazy_static! {
+    /// The Interrupt Descriptor Table.
+    ///
+    /// Thi has the following handlers setup for following interrupts:
+    /// * Breakpoint - Just prints the message along with the [`ExceptionStackFrame`]
+    /// * Double Fault - Just prints the message along with the [`ExceptionStackFrame`] and then
+    /// loops indefinitely.
+    /// * Page Fault - Prints the message along with the [`ExceptionStackFrame`] along with the
+    /// [`VirtualAddress`] that caused the page fault. Afterwards it just loops indefinitely.
+    /// * Timer Interrupt - Notifyes the [`PROGRAMABLE_INTERRUPT_CONTROLERS`] that it is the end of
+    /// interrupt and nothing else. i.e. it effectively does nothing.
+    /// * Keyboard Interrupt - Makes use of the Colemak keypoard layout configuration to print the
+    /// keycode to the screen. It prints the defult keycode if the key is not printable.
     pub static ref INTERRUPT_DESCRIPTOR_TABLE: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.set_breakpoint_handler(breakpoint_handler);
@@ -38,6 +54,7 @@ lazy_static! {
 }
 
 lazy_static! {
+    /// Sets up PICs at offset 32 and 40.
     pub static ref PROGRAMABLE_INTERRUPT_CONTROLERS: spin::Mutex<ChainedPics> =
         spin::Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 }
@@ -74,6 +91,7 @@ extern "x86-interrupt" fn page_fault_handler(
 
 // Hardware PIC Interrupt Handlers
 
+/// Hardware PIC Intrerrupt Handler offsets
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
@@ -130,6 +148,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStac
 
 // utilities
 
+/// Cause a page fault to occur
 pub fn invoke_page_fault_exception() {
     unsafe {
         *(0xdeadbeef as *mut u64) = 42;
@@ -138,6 +157,7 @@ pub fn invoke_page_fault_exception() {
 
 // Tests
 
+/// Cause a stack overflow to occur
 #[allow(unconditional_recursion)]
 pub fn stack_overflow() {
     stack_overflow();

@@ -1,3 +1,10 @@
+//! Initialize the Global Descriptor Table.
+//!
+//! Global Descriptor Table is a relict that was used for memory segmentation in the early days
+//! when paging was not the de-facto standard. Unfortunately, it is still used today for
+//! * kernel/user mode switching
+//! * Task state Segment loading
+
 use lazy_static::lazy_static;
 
 use crate::x86_64::{
@@ -8,6 +15,8 @@ use crate::x86_64::{
     tss::{load_task_state_segment, TaskStateSegment},
 };
 
+/// Index of a well known stack that we ought to switch to before we go about handling a Double
+/// Fault.
 pub const INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT: u16 = 0;
 
 lazy_static! {
@@ -37,10 +46,21 @@ lazy_static! {
     };
 }
 
+/// Initialize the Global Descriptor Table.
+///
+/// This function performs the following steps:
+/// * Load the Global Descriptor Table Register with the address of the GDT.
+/// * Reload the code segment register to make use of the GDT (that was initialized in the previous
+/// step)
+/// * Load the task state segment.
 pub fn init() {
     GLOBAL_DESCRIPTOR_TABLE.0.load();
     unsafe {
+        // We need to reload the code segment register to switch to the new GDT. The old value can
+        // point to an invalid GDT location.
         set_code_segment_selector(GLOBAL_DESCRIPTOR_TABLE.1);
+        // We need to tell the CPU to use the new TSS segment. The old value can point to an
+        // invalid TSS location.
         load_task_state_segment(GLOBAL_DESCRIPTOR_TABLE.2);
     }
 }

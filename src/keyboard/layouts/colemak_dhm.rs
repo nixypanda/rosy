@@ -1,5 +1,6 @@
 use pc_keyboard::{DecodedKey, HandleControl, KeyCode, KeyboardLayout, Modifiers};
 
+/// Support for Colemak with DH mod
 pub struct ColemakDHm;
 
 impl KeyboardLayout for ColemakDHm {
