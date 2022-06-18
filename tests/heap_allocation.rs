@@ -62,3 +62,13 @@ fn test_allocator_uses_freed_memory_for_subsequent_allocations() {
         assert_eq!(*x, i);
     }
 }
+
+#[test_case]
+fn test_allocator_frees_up_memory_even_if_there_is_a_long_lived_allocation() {
+    let long_lived = Box::new(1);
+    for i in 0..HEAP_SIZE {
+        let x = Box::new(i);
+        assert_eq!(*x, i);
+    }
+    assert_eq!(*long_lived, 1);
+}
