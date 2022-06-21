@@ -11,6 +11,7 @@ use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
 use rosy::{
     allocation,
+    async_runtime::{Executor, Task},
     memory::active_level4_page_table,
     print, println,
     utils::halt_loop,
@@ -50,6 +51,7 @@ pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     verify_page_mapping_works(offset_memory_mapper);
     map_page_which_requires_frame_allocation(offset_memory_mapper);
     perform_heap_allocated_operations();
+    execute_async_tasks();
 
     #[cfg(test)]
     test_main();
@@ -156,6 +158,21 @@ fn perform_heap_allocated_operations() {
         "reference count is {} now",
         Rc::strong_count(&cloned_reference)
     );
+}
+
+async fn async_number() -> usize {
+    42
+}
+
+async fn perform_async_printing() {
+    let number = async_number().await;
+    println!("async number {}", number);
+}
+
+fn execute_async_tasks() {
+    let mut executor = Executor::new();
+    executor.spawn(Task::new(perform_async_printing()));
+    executor.run();
 }
 
 #[cfg(not(test))]

@@ -21,6 +21,7 @@ extern crate alloc;
 
 pub mod allocation;
 pub mod allocator;
+pub mod async_runtime;
 pub mod gdt;
 pub mod interrupt;
 pub mod keyboard;
