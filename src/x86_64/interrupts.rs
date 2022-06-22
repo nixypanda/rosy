@@ -16,9 +16,23 @@ pub fn enable() {
 /// Disable interrupts.
 ///
 /// This is a wrapper around the `cli` instruction.
-fn disable() {
+pub fn disable() {
     unsafe {
         asm!("cli", options(nomem, nostack));
+    }
+}
+
+/// Atomically enable interrupts and put the CPU to sleep
+///
+/// Executes the `sti; hlt` instruction sequence. Since the `sti` instruction
+/// keeps interrupts disabled until after the immediately following
+/// instruction (called "interrupt shadow"), no interrupt can occur between the
+/// two instructions. (One exception to this are non-maskable interrupts; this
+/// is explained below.)
+#[inline]
+pub fn enable_and_halt_cpu_till_next_one() {
+    unsafe {
+        asm!("sti; hlt", options(nomem, nostack));
     }
 }
 

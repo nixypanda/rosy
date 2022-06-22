@@ -1,21 +1,40 @@
-use alloc::{boxed::Box, collections::VecDeque};
+use alloc::{boxed::Box, collections::BTreeMap, sync::Arc, task::Wake};
 use core::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
+    sync::atomic::{AtomicU64, Ordering},
+    task::{Context, Poll, Waker},
 };
+use crossbeam_queue::ArrayQueue;
+
+use crate::x86_64::interrupts;
+
+static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+const DEFAULT_TASK_QUEUE_SIZE: usize = 100;
 
 pub struct Task {
+    id: TaskId,
     future: Pin<Box<dyn Future<Output = ()>>>,
 }
 
 pub struct Executor {
-    tasks: VecDeque<Task>,
+    tasks: BTreeMap<TaskId, Task>,
+    task_queue: Arc<ArrayQueue<TaskId>>,
+    waker_cache: BTreeMap<TaskId, Waker>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct TaskId(u64);
+
+struct TaskWaker {
+    id: TaskId,
+    queue: Arc<ArrayQueue<TaskId>>,
 }
 
 impl Task {
     pub fn new(future: impl Future<Output = ()> + 'static) -> Self {
         Self {
+            id: TaskId::new(),
             future: Box::pin(future),
         }
     }
@@ -25,43 +44,80 @@ impl Task {
     }
 }
 
+impl TaskId {
+    fn new() -> Self {
+        TaskId(NEXT_ID.fetch_add(1, Ordering::Relaxed))
+    }
+}
+
+impl TaskWaker {
+    fn new(id: TaskId, queue: Arc<ArrayQueue<TaskId>>) -> Waker {
+        Waker::from(Arc::new(TaskWaker { id, queue }))
+    }
+
+    fn wake_task(&self) {
+        self.queue.push(self.id).expect("task_queue full");
+    }
+}
+
+impl Wake for TaskWaker {
+    fn wake(self: Arc<Self>) {
+        self.wake_task();
+    }
+}
+
 impl Executor {
     pub fn new() -> Self {
-        Self {
-            tasks: VecDeque::new(),
+        Executor {
+            tasks: BTreeMap::new(),
+            task_queue: Arc::new(ArrayQueue::new(DEFAULT_TASK_QUEUE_SIZE)),
+            waker_cache: BTreeMap::new(),
         }
     }
 
     pub fn spawn(&mut self, task: Task) {
-        self.tasks.push_back(task);
+        let task_id = task.id;
+        if self.tasks.insert(task.id, task).is_some() {
+            panic!("Task with same id already present {:?}", task_id);
+        }
+        self.task_queue.push(task_id).expect("queue full");
     }
 
     pub fn run(&mut self) {
-        while let Some(mut task) = self.tasks.pop_front() {
-            let waker = waker();
+        loop {
+            self.run_ready_tasks();
+            self.sleep_if_idle();
+        }
+    }
+
+    fn run_ready_tasks(&mut self) {
+        while let Some(task_id) = self.task_queue.pop() {
+            let task = match self.tasks.get_mut(&task_id) {
+                Some(task) => task,
+                None => continue,
+            };
+
+            let waker = self
+                .waker_cache
+                .entry(task_id)
+                .or_insert_with(|| TaskWaker::new(task_id, self.task_queue.clone()));
             let mut context = Context::from_waker(&waker);
             match task.poll(&mut context) {
-                Poll::Ready(_) => {}
-                Poll::Pending => {
-                    self.tasks.push_back(task);
+                Poll::Ready(_) => {
+                    self.tasks.remove(&task_id);
+                    self.waker_cache.remove(&task_id);
                 }
+                Poll::Pending => {}
             }
         }
     }
-}
 
-fn raw_waker() -> RawWaker {
-    fn clone_no_op(_: *const ()) -> RawWaker {
-        raw_waker()
+    fn sleep_if_idle(&self) {
+        interrupts::disable();
+        if self.task_queue.is_empty() {
+            interrupts::enable_and_halt_cpu_till_next_one();
+        } else {
+            interrupts::enable();
+        }
     }
-    fn wake_no_op(_: *const ()) {}
-    fn wake_by_ref_no_op(_: *const ()) {}
-    fn drop_no_op(_: *const ()) {}
-
-    let vtable = &RawWakerVTable::new(clone_no_op, wake_no_op, wake_by_ref_no_op, drop_no_op);
-    RawWaker::new(0 as *const (), vtable)
-}
-
-fn waker() -> Waker {
-    unsafe { Waker::from_raw(raw_waker()) }
 }

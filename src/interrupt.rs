@@ -6,7 +6,6 @@ use crate::{
     gdt::INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT,
     keyboard,
     pic8258::ChainedPics,
-    print,
     utils::halt_loop,
     x86_64::{
         idt::{ExceptionStackFrame, InterruptDescriptorTable, PageFaultErrorCode},
