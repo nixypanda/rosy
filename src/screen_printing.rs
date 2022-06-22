@@ -56,6 +56,17 @@ macro_rules! error {
     );
 }
 
+/// Use [`static@WRITER`] to write to the VGA buffer using yellow coloring without newline
+#[macro_export]
+macro_rules! warn {
+    ($($arg:tt)*) => (
+        $crate::screen_printing::_print(
+            *$crate::vga::WARN_COLOR_CODE,
+            format_args!($($arg)*)
+        )
+    );
+}
+
 #[doc(hidden)]
 pub fn _print(color_code: ColorCode, args: fmt::Arguments) {
     // Execute without interrupts disables interrupts while executing a piece of code. We use it to

@@ -4,6 +4,7 @@ use lazy_static::lazy_static;
 use crate::{
     error, errorln,
     gdt::INTERRUPT_STACK_TABLE_INDEX_DOUBLE_FAULT,
+    keyboard,
     pic8258::ChainedPics,
     print,
     utils::halt_loop,
@@ -114,31 +115,9 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStackFrame) {
-    use crate::ps2_keyboard_decoder::{
-        ColemakDHm, DecodedKey, HandleControl, Keyboard, ScancodeSet1,
-    };
-    use spin::Mutex;
-
-    lazy_static! {
-        static ref KEYBOARD: Mutex<Keyboard<ColemakDHm, ScancodeSet1>> = Mutex::new(Keyboard::new(
-            ColemakDHm,
-            ScancodeSet1,
-            HandleControl::Ignore
-        ));
-    }
-
-    let mut keyboard = KEYBOARD.lock();
     let port = Port::new(PS_2_CONTROLLER_PORT);
-
     let scancode: u8 = unsafe { port.read() };
-    if let Ok(Some(key_event)) = keyboard.add_byte(scancode) {
-        if let Some(key) = keyboard.process_keyevent(key_event) {
-            match key {
-                DecodedKey::Unicode(character) => print!("{}", character),
-                DecodedKey::RawKey(key) => print!("{:?}", key),
-            }
-        }
-    }
+    keyboard::add_scancode(scancode);
 
     unsafe {
         PROGRAMABLE_INTERRUPT_CONTROLERS

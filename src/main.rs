@@ -12,6 +12,7 @@ use core::panic::PanicInfo;
 use rosy::{
     allocation,
     async_runtime::{Executor, Task},
+    keyboard,
     memory::active_level4_page_table,
     print, println,
     utils::halt_loop,
@@ -172,6 +173,7 @@ async fn perform_async_printing() {
 fn execute_async_tasks() {
     let mut executor = Executor::new();
     executor.spawn(Task::new(perform_async_printing()));
+    executor.spawn(Task::new(keyboard::print_keypresses()));
     executor.run();
 }
 

@@ -18,6 +18,10 @@ lazy_static! {
     /// The color uset to print errors. It is Red
     pub static ref ERROR_COLOR_CODE: ColorCode = ColorCode::new(Color::Red, Color::Black);
 }
+lazy_static! {
+    /// The color uset to print errors. It is Red
+    pub static ref WARN_COLOR_CODE: ColorCode = ColorCode::new(Color::Yellow, Color::Black);
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

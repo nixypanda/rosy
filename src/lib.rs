@@ -24,6 +24,7 @@ pub mod allocator;
 pub mod async_runtime;
 pub mod gdt;
 pub mod interrupt;
+pub mod keyboard;
 pub mod memory;
 pub mod pic8258;
 pub mod ps2_keyboard_decoder;

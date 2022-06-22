@@ -22,6 +22,9 @@ uart_16550 = { version = "0.2.0" }
 bit_field = { version = "0.10.1" }
 bitflags = { version = "1.3.2" }
 pc-keyboard = "0.5.1"
+crossbeam-queue = { version = "0.3.5", default-features = false, features = ["alloc"]}
+conquer-once = { version = "0.3.2", default-features = false }
+futures-util = { version = "0.3.21", default-features = false, features = ["alloc"]}
 
 [package.metadata.bootimage]
 test-args = [
