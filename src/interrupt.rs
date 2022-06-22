@@ -114,8 +114,9 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: ExceptionStackFr
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: ExceptionStackFrame) {
-    use crate::keyboard::ColemakDHm;
-    use pc_keyboard::{DecodedKey, HandleControl, Keyboard, ScancodeSet1};
+    use crate::ps2_keyboard_decoder::{
+        ColemakDHm, DecodedKey, HandleControl, Keyboard, ScancodeSet1,
+    };
     use spin::Mutex;
 
     lazy_static! {
