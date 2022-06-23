@@ -83,14 +83,14 @@ impl Executor {
         self.task_queue.push(task_id).expect("queue full");
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> ! {
         loop {
             self.run_ready_tasks();
             self.sleep_if_idle();
         }
     }
 
-    fn run_ready_tasks(&mut self) {
+    pub fn run_ready_tasks(&mut self) {
         while let Some(task_id) = self.task_queue.pop() {
             let task = match self.tasks.get_mut(&task_id) {
                 Some(task) => task,

@@ -8,41 +8,20 @@ extern crate alloc;
 
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use rosy::{
-    async_runtime::{Executor, Task},
-    keyboard, print, println,
-    utils::halt_loop,
-};
+use rosy::{async_runtime::Executor, print, println};
 
 entry_point!(kernel_main);
 
 pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     rosy::init(boot_info);
+    let mut executor = Executor::new();
+    rosy::init_async_tasks(&mut executor);
 
     println!("Hello World!");
-
-    execute_async_tasks();
 
     #[cfg(test)]
     test_main();
 
-    println!("It did not crash!");
-    halt_loop();
-}
-
-async fn async_number() -> usize {
-    42
-}
-
-async fn perform_async_printing() {
-    let number = async_number().await;
-    println!("async number {}", number);
-}
-
-fn execute_async_tasks() {
-    let mut executor = Executor::new();
-    executor.spawn(Task::new(perform_async_printing()));
-    executor.spawn(Task::new(keyboard::print_keypresses()));
     executor.run();
 }
 

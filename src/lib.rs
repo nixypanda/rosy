@@ -36,6 +36,7 @@ pub mod utils;
 pub mod vga;
 pub mod x86_64;
 
+use async_runtime::{Executor, Task};
 use bootloader::BootInfo;
 use core::ops::Fn;
 use core::panic::PanicInfo;
@@ -58,6 +59,10 @@ pub fn init(boot_info: &'static BootInfo) {
     };
     x86_64::interrupts::enable();
     memory::init(boot_info);
+}
+
+pub fn init_async_tasks(executor: &mut Executor) {
+    executor.spawn(Task::new(keyboard::print_keypresses()));
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
