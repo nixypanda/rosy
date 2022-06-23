@@ -195,6 +195,17 @@ impl Writer {
         })
     }
 
+    pub fn clear_last_char(&mut self) {
+        let blank = ScreenChar {
+            color_code: self.color_code,
+            ascii_code_point: b' ',
+        };
+        if self.col_position > 0 {
+            self.buffer.chars[BUFFER_HEIGHT - 1][self.col_position - 1].write(blank);
+            self.col_position -= 1;
+        }
+    }
+
     fn write_byte(&mut self, color_code: ColorCode, byte: u8) {
         match byte {
             // printable ascii characters

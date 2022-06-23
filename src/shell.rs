@@ -7,7 +7,12 @@ use crate::{
     keyboard::ScancodeStream,
     print, println,
     ps2_keyboard_decoder::{ColemakDHm, DecodedKey, HandleControl, Keyboard, ScancodeSet1},
+    screen_printing::WRITER,
+    x86_64::interrupts,
 };
+
+const ENTER: char = '\n';
+const BACKSPACE: char = 0x08 as char;
 
 /// Represents a user shell.
 ///
@@ -40,11 +45,21 @@ impl Shell {
                 if let Some(key) = self.keyboard.process_keyevent(key_event) {
                     match key {
                         DecodedKey::Unicode(character) => {
-                            print!("{}", character);
-                            if character == '\n' {
+                            if character == ENTER {
+                                print!("{}", character);
                                 break;
+                            } else if character == BACKSPACE {
+                                if !command.is_empty() {
+                                    interrupts::execute_without_interrupts(|| {
+                                        let mut writer = WRITER.lock();
+                                        writer.clear_last_char();
+                                    });
+                                    command.pop();
+                                }
+                            } else {
+                                print!("{}", character);
+                                command.push(character);
                             }
-                            command.push(character);
                         }
                         DecodedKey::RawKey(key) => print!("{:?}", key),
                     }
