@@ -5,6 +5,8 @@ use core::fmt::Write;
 use lazy_static::lazy_static;
 use volatile::Volatile;
 
+use crate::gen_iter;
+
 const BUFFER_HEIGHT: usize = 25;
 const BUFFER_WIDTH: usize = 80;
 const NEWLINE_BYTE: u8 = b'\n';
@@ -26,7 +28,7 @@ lazy_static! {
 #[allow(dead_code)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-enum Color {
+pub enum Color {
     Black = 0,
     Blue = 1,
     Green = 2,
@@ -66,7 +68,7 @@ enum Color {
 pub struct ColorCode(u8);
 
 impl ColorCode {
-    fn new(foregroud: Color, background: Color) -> ColorCode {
+    pub fn new(foregroud: Color, background: Color) -> ColorCode {
         ColorCode((background as u8) << 4 | foregroud as u8)
     }
 }
@@ -96,6 +98,13 @@ impl ScreenChar {
             color_code: *DEFAULT_COLOR_CODE,
         }
     }
+
+    pub fn new(character: char, color: ColorCode) -> Self {
+        ScreenChar {
+            ascii_code_point: character as u8,
+            color_code: color,
+        }
+    }
 }
 
 /// Representation of the VGA buffer. It is essentially a matrix of [`ScreenChar`]s. This matrix is
@@ -108,6 +117,18 @@ pub struct Buffer {
     // optimization, we need to specify these writes as volatile. This tells the compiler that the
     // write has side effects and should not be optimized away.
     chars: [[Volatile<ScreenChar>; BUFFER_WIDTH]; BUFFER_HEIGHT],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ScreenLocation {
+    row: usize,
+    col: usize,
+}
+
+impl ScreenLocation {
+    pub const fn new(row: usize, col: usize) -> Self {
+        ScreenLocation { row, col }
+    }
 }
 
 /// The Writer writes to the VGA buffer.
@@ -152,14 +173,26 @@ impl Writer {
         }
     }
 
-    #[cfg(test)]
     pub fn char_at(&self, row: usize, col: usize) -> ScreenChar {
         self.buffer.chars[row][col].read()
     }
 
-    #[cfg(test)]
     pub fn buffer_height(&self) -> usize {
         BUFFER_HEIGHT
+    }
+
+    pub fn string_at(
+        &self,
+        start: ScreenLocation,
+        end: ScreenLocation,
+    ) -> impl Iterator<Item = ScreenChar> + '_ {
+        gen_iter!(move {
+            for row in start.row..=end.row {
+                for col in start.col..=end.col {
+                    yield self.char_at(row, col);
+                }
+            }
+        })
     }
 
     fn write_byte(&mut self, color_code: ColorCode, byte: u8) {

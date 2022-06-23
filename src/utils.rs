@@ -37,3 +37,69 @@ impl<A> Locked<A> {
         self.inner.lock()
     }
 }
+
+// Take from https://github.com/tinaun/gen-iter/blob/master/src/lib.rs
+
+use core::iter::Iterator;
+use core::marker::Unpin;
+use core::ops::{Generator, GeneratorState};
+use core::pin::Pin;
+
+/// a iterator that holds an internal generator representing
+/// the iteration state
+#[derive(Copy, Clone, Debug)]
+pub struct GenIter<T>(pub T)
+where
+    T: Generator<Return = ()> + Unpin;
+
+impl<T> Iterator for GenIter<T>
+where
+    T: Generator<Return = ()> + Unpin,
+{
+    type Item = T::Yield;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        match Pin::new(&mut self.0).resume(()) {
+            GeneratorState::Yielded(n) => Some(n),
+            GeneratorState::Complete(()) => None,
+        }
+    }
+}
+
+impl<G> From<G> for GenIter<G>
+where
+    G: Generator<Return = ()> + Unpin,
+{
+    #[inline]
+    fn from(gen: G) -> Self {
+        GenIter(gen)
+    }
+}
+
+/// macro to simplify iterator - via - generator construction
+///
+/// ```
+/// #![feature(generators)]
+///
+/// use gen_iter::gen_iter;
+///
+/// let mut g = gen_iter!({
+///     yield 1;
+///     yield 2;
+/// });
+///
+/// assert_eq!(g.next(), Some(1));
+/// assert_eq!(g.next(), Some(2));
+/// assert_eq!(g.next(), None);
+///
+/// ```
+#[macro_export]
+macro_rules! gen_iter {
+    ($block: block) => {
+        $crate::utils::GenIter(|| $block)
+    };
+    (move $block: block) => {
+        $crate::utils::GenIter(move || $block)
+    };
+}
