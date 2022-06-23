@@ -8,14 +8,15 @@ extern crate alloc;
 
 use bootloader::{entry_point, BootInfo};
 use core::panic::PanicInfo;
-use rosy::{async_runtime::Executor, print, println};
+use rosy::{async_runtime::Executor, print, println, shell::Shell};
 
 entry_point!(kernel_main);
 
 pub fn kernel_main(boot_info: &'static BootInfo) -> ! {
     rosy::init(boot_info);
     let mut executor = Executor::new();
-    rosy::init_async_tasks(&mut executor);
+    let mut shell = Shell::default();
+    rosy::init_async_tasks(&mut executor, &mut shell);
 
     println!("Hello World!");
 

@@ -32,6 +32,7 @@ pub mod pic8258;
 pub mod ps2_keyboard_decoder;
 pub mod screen_printing;
 pub mod serial;
+pub mod shell;
 pub mod utils;
 pub mod vga;
 pub mod x86_64;
@@ -40,6 +41,7 @@ use async_runtime::{Executor, Task};
 use bootloader::BootInfo;
 use core::ops::Fn;
 use core::panic::PanicInfo;
+use shell::Shell;
 
 use x86_64::port::Port;
 
@@ -61,8 +63,8 @@ pub fn init(boot_info: &'static BootInfo) {
     memory::init(boot_info);
 }
 
-pub fn init_async_tasks(executor: &mut Executor) {
-    executor.spawn(Task::new(keyboard::print_keypresses()));
+pub fn init_async_tasks<'a>(executor: &mut Executor<'a>, shell: &'a mut Shell) {
+    executor.spawn(Task::new(shell.run()))
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
