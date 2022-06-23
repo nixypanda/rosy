@@ -36,26 +36,28 @@ pub mod utils;
 pub mod vga;
 pub mod x86_64;
 
+use bootloader::BootInfo;
 use core::ops::Fn;
 use core::panic::PanicInfo;
 
 use x86_64::port::Port;
 
 #[cfg(test)]
-use bootloader::{entry_point, BootInfo};
+use bootloader::entry_point;
 
 #[cfg(test)]
 entry_point!(test_kernel_main);
 
-pub fn init() {
-    crate::gdt::init();
-    crate::interrupt::init();
+pub fn init(boot_info: &'static BootInfo) {
+    gdt::init();
+    interrupt::init();
     unsafe {
         interrupt::PROGRAMABLE_INTERRUPT_CONTROLERS
             .lock()
             .initialize()
     };
-    crate::x86_64::interrupts::enable();
+    x86_64::interrupts::enable();
+    memory::init(boot_info);
 }
 
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
@@ -70,10 +72,10 @@ pub fn test_panic_handler(info: &PanicInfo) -> ! {
 
 #[cfg(test)]
 #[no_mangle]
-pub fn test_kernel_main(_boot_info: &'static BootInfo) -> ! {
+pub fn test_kernel_main(boot_info: &'static BootInfo) -> ! {
     use utils::halt_loop;
 
-    init();
+    init(boot_info);
     test_main();
 
     halt_loop();

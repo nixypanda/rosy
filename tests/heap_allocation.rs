@@ -14,17 +14,7 @@ use rosy::allocation::HEAP_SIZE;
 entry_point!(main);
 
 fn main(boot_info: &'static BootInfo) -> ! {
-    use rosy::allocation;
-    use rosy::x86_64::{
-        address::VirtualAddress,
-        paging::{FrameAllocator, OffsetMemoryMapper},
-    };
-
-    rosy::init();
-    let physical_memory_offset = VirtualAddress::new(boot_info.physical_memory_offset);
-    let frame_allocator = unsafe { FrameAllocator::new(&boot_info.memory_map) };
-    let mut mapper = unsafe { OffsetMemoryMapper::new(physical_memory_offset, frame_allocator) };
-    allocation::init_heap(&mut mapper).expect("heap initialization failed");
+    rosy::init(boot_info);
 
     test_main();
     loop {}

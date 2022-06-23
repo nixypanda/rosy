@@ -59,7 +59,7 @@ entry_point!(main);
 
 fn main(boot_info: &'static BootInfo) -> ! {
     use rosy::x86_64::paging::FrameAllocator;
-    rosy::init();
+    rosy::init(boot_info);
 
     let physical_memory_offset = VirtualAddress::new(boot_info.physical_memory_offset);
     let frame_allocator = unsafe { FrameAllocator::new(&boot_info.memory_map) };
