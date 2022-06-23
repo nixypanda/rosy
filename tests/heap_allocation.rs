@@ -6,9 +6,9 @@
 
 extern crate alloc;
 
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, rc::Rc, vec, vec::Vec};
 use bootloader::{entry_point, BootInfo};
-use core::panic::PanicInfo;
+use core::{mem, panic::PanicInfo};
 use rosy::allocation::HEAP_SIZE;
 
 entry_point!(main);
@@ -53,6 +53,15 @@ fn test_large_heap_allocations_work() {
         vec.push(i);
     }
     assert_eq!(vec.iter().sum::<u64>(), sum_of_first_n_numbers(n));
+}
+
+#[test_case]
+fn test_reference_counting_works_properly() {
+    let reference_counted = Rc::new(vec![1, 2, 3]);
+    let cloned_reference = reference_counted.clone();
+    assert_eq!(Rc::strong_count(&cloned_reference), 2);
+    mem::drop(reference_counted);
+    assert_eq!(Rc::strong_count(&cloned_reference), 1);
 }
 
 #[test_case]
