@@ -12,13 +12,13 @@ use crate::x86_64::interrupts;
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 const DEFAULT_TASK_QUEUE_SIZE: usize = 100;
 
-pub struct Task {
+pub struct Task<'a> {
     id: TaskId,
-    future: Pin<Box<dyn Future<Output = ()>>>,
+    future: Pin<Box<dyn Future<Output = ()> + 'a>>,
 }
 
-pub struct Executor {
-    tasks: BTreeMap<TaskId, Task>,
+pub struct Executor<'a> {
+    tasks: BTreeMap<TaskId, Task<'a>>,
     task_queue: Arc<ArrayQueue<TaskId>>,
     waker_cache: BTreeMap<TaskId, Waker>,
 }
@@ -31,8 +31,8 @@ struct TaskWaker {
     queue: Arc<ArrayQueue<TaskId>>,
 }
 
-impl Task {
-    pub fn new(future: impl Future<Output = ()> + 'static) -> Self {
+impl<'a> Task<'a> {
+    pub fn new(future: impl Future<Output = ()> + 'a) -> Self {
         Self {
             id: TaskId::new(),
             future: Box::pin(future),
@@ -66,7 +66,7 @@ impl Wake for TaskWaker {
     }
 }
 
-impl Executor {
+impl<'a> Executor<'a> {
     pub fn new() -> Self {
         Executor {
             tasks: BTreeMap::new(),
@@ -75,7 +75,7 @@ impl Executor {
         }
     }
 
-    pub fn spawn(&mut self, task: Task) {
+    pub fn spawn(&mut self, task: Task<'a>) {
         let task_id = task.id;
         if self.tasks.insert(task.id, task).is_some() {
             panic!("Task with same id already present {:?}", task_id);
