@@ -28,6 +28,9 @@ futures-util = { version = "0.3.21", default-features = false, features = ["allo
 
 [package.metadata.bootimage]
 test-args = [
+    # setup exiting qemu from the guest system using `isa-debug-exit` device.
+    # When a value is written to the port specified by `iobase`, qemu exits
+    # with exit status `(value << 1) | 1`
     "-device", "isa-debug-exit,iobase=0xf4,iosize=0x04",
     "-serial", "stdio",
     "-display", "none"

@@ -51,6 +51,16 @@ use bootloader::entry_point;
 #[cfg(test)]
 entry_point!(test_kernel_main);
 
+const ISA_EXIT_DEVICE_IOBASE: u16 = 0xf4;
+
+/// Initialize the OS
+///
+/// * Setup Global Descriptor Table
+/// * Setup Interrupt Descriptor Table
+/// * Setup Programable Interrupt Controllers
+/// * Enable interrupts
+/// * Setup offset based memory mapping
+/// * Setup heap allocator
 pub fn init(boot_info: &'static BootInfo) {
     gdt::init();
     interrupt::init();
@@ -63,10 +73,24 @@ pub fn init(boot_info: &'static BootInfo) {
     memory::init(boot_info);
 }
 
+/// Initialize async jobs
+///
+/// Note: We need to call `run` on [`Executor`] seprately to start there tasks
+///
+/// * Setup shell task
 pub fn init_async_tasks<'a>(executor: &mut Executor<'a>, shell: &'a mut Shell) {
     executor.spawn(Task::new(shell.run()))
 }
 
+// Testing related stuff
+// Stuff that is not marked with `#[cfg(test)]` is used by integration tests
+
+/// Panic handler that prints information to the serial interface.
+///
+/// This is helpful for testing as we can view this information on the host machine. It also exits
+/// qemu with a faild status code.
+///
+/// This is just a normal function the user needs to register it in order to use it.
 pub fn test_panic_handler(info: &PanicInfo) -> ! {
     serial_error!("[Failed]");
     serial_println!();
@@ -88,6 +112,11 @@ pub fn test_kernel_main(boot_info: &'static BootInfo) -> ! {
     halt_loop();
 }
 
+/// Trait that effectively uses aspect oriented programming to add some information to a test when
+/// we run it.
+///
+/// We declare a method `run` in this trait then implement this trait for all types `T` that
+/// implement the `Fn` trait (i.e all functions)
 pub trait Testable {
     fn run(&self);
 }
@@ -96,6 +125,7 @@ impl<T> Testable for T
 where
     T: Fn(),
 {
+    /// Print a the test name followed by `[ok]` (in green coloring) if it succeeds.
     fn run(&self) {
         serial_print!("{}...\t", core::any::type_name::<T>());
         self();
@@ -104,6 +134,13 @@ where
     }
 }
 
+/// A custom test runner.
+///
+/// When we use `custom_test_frameworks` feature, it collects all the functions marked with
+/// `#[test_case]` and provides them to a custom test runner that we have to register (this is that
+/// function).
+/// It makes use of the [`Testable`] trait to call `run` on each of the tests. After all is done it
+/// exits qemu with success status code.
 pub fn test_runner(tests: &[&dyn Testable]) {
     serial_println!();
     serial_println!("Running {} tests", tests.len());
@@ -114,21 +151,32 @@ pub fn test_runner(tests: &[&dyn Testable]) {
     exit_qemu(QemuExitCode::Success);
 }
 
+/// Tests specific panic handler. It is invoked when we run unit tests.
 #[cfg(test)]
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
     test_panic_handler(info)
 }
 
+/// Exit codes that will be used when we quit qemu using the `isa-debug-device`.
+///
+/// The values don't matter we just don't want to use codes that qemu already uses.
+/// After the transformation the code will become `(value << 1) | 1`.
+/// Check the `Cargo.toml` `package.metadata.bootimage.test-success-exit-code`
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum QemuExitCode {
+    /// Success exit code: (0b10000 << 1) | 1 = 0b100001 (or 33) (or 0x21)
     Success = 0x10,
+    /// Failure exit code: (0b11000 << 1) | 1 = 0b110001 (or 49) (or 0x31)
     Failed = 0x11,
 }
 
+/// Uses port-mapped I/O to communicate.
+///
+/// It is intended to be used with the `isa-debug-exit` device to exit qemu.
 pub fn exit_qemu(exit_code: QemuExitCode) {
-    let port: Port<u32> = Port::new(0xf4);
+    let port: Port<u32> = Port::new(ISA_EXIT_DEVICE_IOBASE);
     unsafe {
         port.write(exit_code as u32);
     }
